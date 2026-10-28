@@ -1,6 +1,11 @@
 package com.zigrawr.zig.tokenizer
 
-// Tags enumeration taken from Zig compiler as-is https://codeberg.org/ziglang/zig/src/branch/master/lib/std/zig/tokenizer.zig
+import com.zigrawr.lang.bin.Bytes
+import com.zigrawr.lang.bin.HashedBytesSlice
+import com.zigrawr.lang.bin.asReadonly
+import com.zigrawr.lang.bin.toHashedSlice
+
+// Tags enumeration ported from Zig compiler as-is https://codeberg.org/ziglang/zig/src/tag/0.17.0/lib/std/zig/tokenizer.zig
 enum class Tag(text: String?, symbol: String? = null) {
 
 
@@ -21,7 +26,7 @@ enum class Tag(text: String?, symbol: String? = null) {
     bang_equal("!="),
     l_paren("("),
     r_paren(")"),
-    semicolon(":"),
+    semicolon(";"),
     percent("%"),
     percent_equal("%="),
     l_brace("{"),
@@ -122,11 +127,73 @@ enum class Tag(text: String?, symbol: String? = null) {
     keyword_volatile("volatile"),
     keyword_while("while");
 
-    val bytes: ByteArray? = text?.encodeToByteArray()
+    val bytes: Bytes? = text?.encodeToByteArray()?.asReadonly()
 
     init {
         if (bytes != null) {
-            assert(bytes.decodeToString().isNotBlank())
+//            assert(bytes.bytes.isNotBlank()) todo
         }
+    }
+
+    companion object {
+
+        private val keywords: Map<HashedBytesSlice, Tag>
+
+        init {
+            require(Tag.entries.size <= UByte.MAX_VALUE.toInt() + 1) {
+                "Token tags must fit in 8 bits"
+            }
+            val stringMap: Map<String, Tag> = mapOf(
+                "addrspace" to keyword_addrspace,
+                "align" to keyword_align,
+                "allowzero" to keyword_allowzero,
+                "and" to keyword_and,
+                "anyframe" to keyword_anyframe,
+                "anytype" to keyword_anytype,
+                "asm" to keyword_asm,
+                "break" to keyword_break,
+                "callconv" to keyword_callconv,
+                "catch" to keyword_catch,
+                "comptime" to keyword_comptime,
+                "const" to keyword_const,
+                "continue" to keyword_continue,
+                "defer" to keyword_defer,
+                "else" to keyword_else,
+                "enum" to keyword_enum,
+                "errdefer" to keyword_errdefer,
+                "error" to keyword_error,
+                "export" to keyword_export,
+                "extern" to keyword_extern,
+                "fn" to keyword_fn,
+                "for" to keyword_for,
+                "if" to keyword_if,
+                "inline" to keyword_inline,
+                "noalias" to keyword_noalias,
+                "noinline" to keyword_noinline,
+                "nosuspend" to keyword_nosuspend,
+                "opaque" to keyword_opaque,
+                "or" to keyword_or,
+                "orelse" to keyword_orelse,
+                "packed" to keyword_packed,
+                "pub" to keyword_pub,
+                "resume" to keyword_resume,
+                "return" to keyword_return,
+                "linksection" to keyword_linksection,
+                "struct" to keyword_struct,
+                "suspend" to keyword_suspend,
+                "switch" to keyword_switch,
+                "test" to keyword_test,
+                "threadlocal" to keyword_threadlocal,
+                "try" to keyword_try,
+                "union" to keyword_union,
+                "unreachable" to keyword_unreachable,
+                "var" to keyword_var,
+                "volatile" to keyword_volatile,
+                "while" to keyword_while,
+            )
+            keywords = stringMap.mapKeysTo(HashMap.newHashMap(Tag.entries.size)) { it.key.toHashedSlice() }
+        }
+
+        fun getKeyword(slice: HashedBytesSlice): Tag? = keywords[slice]
     }
 }

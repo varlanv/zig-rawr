@@ -8,6 +8,10 @@ internal sealed interface BytesHash {
         start: Int,
         end: Int,
     ): Int
+
+    companion object {
+        val target: BytesHash = ScalarBytesHash
+    }
 }
 
 private object ScalarBytesHash : BytesHash {
@@ -27,7 +31,7 @@ internal fun hashSwar(
     var result = initial
     var index = start
     while (index <= end - Long.SIZE_BYTES) {
-        val word = longViewHandle.get(bytes, index) as Long
+        val word = longViewHandle.get(bytes.bytes.impl, index) as Long
         result = 31 * result + word.toByte()
         result = 31 * result + (word ushr 8).toByte()
         result = 31 * result + (word ushr 16).toByte()
