@@ -1,0 +1,25 @@
+<idea-plugin>
+    <id>com.varlanv.zigrawr</id>
+    <name>ZigRawr</name>
+    <vendor>varlanv</vendor>
+    <description>Zig language support.</description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.lsp</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="Zig"
+            language="Zig"
+            extensions="zig"
+            implementationClass="com.varlanv.zigrawr.jbplugin.ZigFileType"
+            fieldName="INSTANCE"/>
+    </extensions>
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="Zon"
+            language="Zon"
+            extensions="zon"
+            implementationClass="com.varlanv.zigrawr.jbplugin.ZonFileType"
+            fieldName="INSTANCE"/>
+    </extensions>
+</idea-plugin>

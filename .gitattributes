@@ -1,0 +1,6 @@
+# Set all files to use LF line endings by default
+* text=auto eol=lf
+
+# Override for Windows batch scripts to use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

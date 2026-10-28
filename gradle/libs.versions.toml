@@ -1,0 +1,31 @@
+[versions]
+clionVersion = "2026.2"
+intellijPlatformVersion = "2.19.0"
+jmhPluginVersion = "0.7.3"
+# JDK and bytecode version for production code and tests
+jvmVersion = "25"
+koperVersion = "0.0.1-SNAPSHOT"
+kotestVersion = "6.2.6"
+kotlinVersion = "2.4.21"
+koverVersion = "0.9.11"
+shadowPluginVersion = "9.6.1"
+versionCatalogPluginVersion = "1.1.2"
+
+[libraries]
+kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlinVersion" }
+kotlin-gradle-main = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlinVersion" }
+kotlin-kotest-assertionsCore = { module = "io.kotest:kotest-assertions-core", version.ref = "kotestVersion" }
+kotlin-kotest-assertionsJvm = { module = "io.kotest:kotest-assertions-core-jvm", version.ref = "kotestVersion" }
+kotlin-kotest-frameworkEngine = { module = "io.kotest:kotest-framework-engine", version.ref = "kotestVersion" }
+kotlin-kotest-junit5Runner = { module = "io.kotest:kotest-runner-junit5-jvm", version.ref = "kotestVersion" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlinVersion" }
+
+[plugins]
+intellij-platform = { id = "org.jetbrains.intellij.platform", version.ref = "intellijPlatformVersion" }
+internalConvention = { id = "com.varlanv.wrasse.gradle.internal-gradle-convention-plugin" }
+jmhPlugin = { id = "me.champeau.jmh", version.ref = "jmhPluginVersion" }
+kotest = { id = "io.kotest", version.ref = "kotestVersion" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlinVersion" }
+kotlin-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "koverVersion" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadowPluginVersion" }
+versionCatalogPlugin = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogPluginVersion" }
