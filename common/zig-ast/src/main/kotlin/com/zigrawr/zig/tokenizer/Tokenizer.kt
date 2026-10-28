@@ -9,7 +9,6 @@ private fun hasUtf8Bom(bytes: Bytes): Boolean {
         bytes[0] == 0xEF.toByte() &&
         bytes[1] == 0xBB.toByte() &&
         bytes[2] == 0xBF.toByte()
-
 }
 
 class Tokenizer(

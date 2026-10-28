@@ -33,7 +33,7 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(
     ":common:common-lang",
-    ":common:zig-tokenizer",
+    ":common:zig-ast",
     ":testing:common-test",
     ":apps:jb-plugin",
 )
