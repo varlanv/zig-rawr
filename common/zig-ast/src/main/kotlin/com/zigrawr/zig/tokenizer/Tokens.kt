@@ -1,9 +1,26 @@
 package com.zigrawr.zig.tokenizer
 
-import com.zigrawr.lang.bin.Bytes
+class Tokens(estimatedSize: Int) {
 
-class Tokens @OptIn(ExperimentalUnsignedTypes::class) constructor(
-    private val tokens: Bytes,
-    private val positions: UIntArray,
-    private val tags: Array<Tag>,
-)
+    private var data = LongArray(estimatedSize)
+
+    var size: Int = 0
+        private set
+
+    fun append(token: Token) {
+        val pos = size
+        if (pos == data.size) {
+            val capacity = data.size
+            data = data.copyOf(capacity + maxOf(1, (capacity + 1) / 2))
+        }
+        data[pos] = token.packed
+        size = pos + 1
+    }
+
+    fun get(index: Int): Token {
+        if (index !in 0 until size) {
+            throw IndexOutOfBoundsException("Index $index out of bounds for size $size")
+        }
+        return Token(data[index])
+    }
+}

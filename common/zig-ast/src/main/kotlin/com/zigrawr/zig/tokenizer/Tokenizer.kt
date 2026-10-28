@@ -13,22 +13,21 @@ private fun hasUtf8Bom(bytes: Bytes): Boolean {
 
 class Tokenizer(
     private val buffer: Bytes,
-    index: Int,
 ) {
 
     private var index: ZigSourcePosition
 
     init {
         if (hasUtf8Bom(buffer)) {
-            this.index = ZigSourcePosition(index + 3)
+            this.index = ZigSourcePosition(3)
         } else {
-            this.index = ZigSourcePosition(index)
+            this.index = ZigSourcePosition(0)
         }
     }
 
     fun next(): Token {
         var state = State.start
-        var tag = Tag.invalid
+        var tag = Token.Tag.invalid
         val end: ZigSourcePosition
         var start = index
         while (true) {
@@ -37,7 +36,7 @@ class Tokenizer(
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         0.toByte() -> {
                             if (index.value == buffer.size) {
-                                return Token.pack(index, index, Tag.eof)
+                                return Token.pack(index, index, Token.Tag.eof)
                             } else {
                                 state = State.invalid
                                 continue
@@ -51,13 +50,13 @@ class Tokenizer(
                         }
 
                         '"'.code.toByte() -> {
-                            tag = Tag.string_literal
+                            tag = Token.Tag.string_literal
                             state = State.string_literal
                             continue
                         }
 
                         '\''.code.toByte() -> {
-                            tag = Tag.char_literal
+                            tag = Token.Tag.char_literal
                             state = State.char_literal
                             continue
                         }
@@ -65,7 +64,7 @@ class Tokenizer(
                         '_'.code.toByte(),
                         in 'a'.code.toByte()..'z'.code.toByte(),
                         in 'A'.code.toByte()..'Z'.code.toByte() -> {
-                            tag = Tag.identifier
+                            tag = Token.Tag.identifier
                             state = State.identifier
                             continue
                         }
@@ -91,42 +90,42 @@ class Tokenizer(
                         }
 
                         '('.code.toByte() -> {
-                            tag = Tag.l_paren
+                            tag = Token.Tag.l_paren
                             index += 1
                         }
 
                         ')'.code.toByte() -> {
-                            tag = Tag.r_paren
+                            tag = Token.Tag.r_paren
                             index += 1
                         }
 
                         '['.code.toByte() -> {
-                            tag = Tag.l_bracket
+                            tag = Token.Tag.l_bracket
                             index += 1
                         }
 
                         ']'.code.toByte() -> {
-                            tag = Tag.r_bracket
+                            tag = Token.Tag.r_bracket
                             index += 1
                         }
 
                         ';'.code.toByte() -> {
-                            tag = Tag.semicolon
+                            tag = Token.Tag.semicolon
                             index += 1
                         }
 
                         ','.code.toByte() -> {
-                            tag = Tag.comma
+                            tag = Token.Tag.comma
                             index += 1
                         }
 
                         '?'.code.toByte() -> {
-                            tag = Tag.question_mark
+                            tag = Token.Tag.question_mark
                             index += 1
                         }
 
                         ':'.code.toByte() -> {
-                            tag = Tag.colon
+                            tag = Token.Tag.colon
                             index += 1
                         }
 
@@ -161,23 +160,23 @@ class Tokenizer(
                         }
 
                         '\\'.code.toByte() -> {
-                            tag = Tag.multiline_string_literal_line
+                            tag = Token.Tag.multiline_string_literal_line
                             state = State.backslash
                             continue
                         }
 
                         '{'.code.toByte() -> {
-                            tag = Tag.l_brace
+                            tag = Token.Tag.l_brace
                             index += 1
                         }
 
                         '}'.code.toByte() -> {
-                            tag = Tag.r_brace
+                            tag = Token.Tag.r_brace
                             index += 1
                         }
 
                         '~'.code.toByte() -> {
-                            tag = Tag.tilde
+                            tag = Token.Tag.tilde
                             index += 1
                         }
 
@@ -202,7 +201,7 @@ class Tokenizer(
                         }
 
                         in '0'.code.toByte()..'9'.code.toByte() -> {
-                            tag = Tag.number_literal
+                            tag = Token.Tag.number_literal
                             index += 1
                             state = State.int
                             continue
@@ -220,7 +219,7 @@ class Tokenizer(
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         0.toByte() -> {
                             if (index.value == buffer.size) {
-                                tag = Tag.invalid
+                                tag = Token.Tag.invalid
                             } else {
                                 state = State.invalid
                                 continue
@@ -246,14 +245,14 @@ class Tokenizer(
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         0.toByte() -> {
                             if (index.value == buffer.size) {
-                                tag = Tag.invalid
+                                tag = Token.Tag.invalid
                             } else {
                                 state = State.invalid
                                 continue
                             }
                         }
 
-                        '\n'.code.toByte() -> tag = Tag.invalid
+                        '\n'.code.toByte() -> tag = Token.Tag.invalid
 
                         else -> {
                             state = State.invalid
@@ -265,9 +264,9 @@ class Tokenizer(
                 State.saw_at_sign -> {
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
-                        0.toByte(), '\n'.code.toByte() -> tag = Tag.invalid
+                        0.toByte(), '\n'.code.toByte() -> tag = Token.Tag.invalid
                         '"'.code.toByte() -> {
-                            tag = Tag.identifier
+                            tag = Token.Tag.identifier
                             state = State.string_literal
                             continue
                         }
@@ -275,7 +274,7 @@ class Tokenizer(
                         '_'.code.toByte(),
                         in 'a'.code.toByte()..'z'.code.toByte(),
                         in 'A'.code.toByte()..'Z'.code.toByte() -> {
-                            tag = Tag.builtin
+                            tag = Token.Tag.builtin
                             state = State.builtin
                             continue
                         }
@@ -291,11 +290,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.ampersand_equal
+                            tag = Token.Tag.ampersand_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.ampersand
+                        else -> tag = Token.Tag.ampersand
                     }
                 }
 
@@ -303,7 +302,7 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.asterisk_equal
+                            tag = Token.Tag.asterisk_equal
                             index += 1
                         }
 
@@ -317,7 +316,7 @@ class Tokenizer(
                             continue
                         }
 
-                        else -> tag = Tag.asterisk
+                        else -> tag = Token.Tag.asterisk
                     }
                 }
 
@@ -325,11 +324,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.asterisk_percent_equal
+                            tag = Token.Tag.asterisk_percent_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.asterisk_percent
+                        else -> tag = Token.Tag.asterisk_percent
                     }
                 }
 
@@ -337,11 +336,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.asterisk_pipe_equal
+                            tag = Token.Tag.asterisk_pipe_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.asterisk_pipe
+                        else -> tag = Token.Tag.asterisk_pipe
                     }
                 }
 
@@ -349,11 +348,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.percent_equal
+                            tag = Token.Tag.percent_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.percent
+                        else -> tag = Token.Tag.percent
                     }
                 }
 
@@ -361,12 +360,12 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.plus_equal
+                            tag = Token.Tag.plus_equal
                             index += 1
                         }
 
                         '+'.code.toByte() -> {
-                            tag = Tag.plus_plus
+                            tag = Token.Tag.plus_plus
                             index += 1
                         }
 
@@ -380,7 +379,7 @@ class Tokenizer(
                             continue
                         }
 
-                        else -> tag = Tag.plus
+                        else -> tag = Token.Tag.plus
                     }
                 }
 
@@ -388,11 +387,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.plus_percent_equal
+                            tag = Token.Tag.plus_percent_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.plus_percent
+                        else -> tag = Token.Tag.plus_percent
                     }
                 }
 
@@ -400,11 +399,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.plus_pipe_equal
+                            tag = Token.Tag.plus_pipe_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.plus_pipe
+                        else -> tag = Token.Tag.plus_pipe
                     }
                 }
 
@@ -412,11 +411,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.caret_equal
+                            tag = Token.Tag.caret_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.caret
+                        else -> tag = Token.Tag.caret
                     }
                 }
 
@@ -433,7 +432,7 @@ class Tokenizer(
 
                         else -> {
                             val ident = HashedBytesSlice(BytesSlice(buffer, start.value, index.value - start.value))
-                            val keyword = Tag.getKeyword(ident)
+                            val keyword = Token.Tag.getKeyword(ident)
                             if (keyword != null) {
                                 tag = keyword
                             }
@@ -459,13 +458,13 @@ class Tokenizer(
                 State.backslash -> {
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
-                        0.toByte() -> tag = Tag.invalid
+                        0.toByte() -> tag = Token.Tag.invalid
                         '\\'.code.toByte() -> {
                             state = State.multiline_string_literal_line
                             continue
                         }
 
-                        '\n'.code.toByte() -> tag = Tag.invalid
+                        '\n'.code.toByte() -> tag = Token.Tag.invalid
                         else -> {
                             state = State.invalid
                             continue
@@ -481,11 +480,11 @@ class Tokenizer(
                                 state = State.invalid
                                 continue
                             } else {
-                                tag = Tag.invalid
+                                tag = Token.Tag.invalid
                             }
                         }
 
-                        '\n'.code.toByte() -> tag = Tag.invalid
+                        '\n'.code.toByte() -> tag = Token.Tag.invalid
                         '\\'.code.toByte() -> {
                             state = State.string_literal_backslash
                             continue
@@ -509,7 +508,7 @@ class Tokenizer(
                 State.string_literal_backslash -> {
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
-                        0.toByte(), '\n'.code.toByte() -> tag = Tag.invalid
+                        0.toByte(), '\n'.code.toByte() -> tag = Token.Tag.invalid
                         in 0x01.toByte()..0x09.toByte(),
                         in 0x0b.toByte()..0x1f.toByte(),
                         0x7f.toByte() -> {
@@ -532,11 +531,11 @@ class Tokenizer(
                                 state = State.invalid
                                 continue
                             } else {
-                                tag = Tag.invalid
+                                tag = Token.Tag.invalid
                             }
                         }
 
-                        '\n'.code.toByte() -> tag = Tag.invalid
+                        '\n'.code.toByte() -> tag = Token.Tag.invalid
                         '\\'.code.toByte() -> {
                             state = State.char_literal_backslash
                             continue
@@ -565,11 +564,11 @@ class Tokenizer(
                                 state = State.invalid
                                 continue
                             } else {
-                                tag = Tag.invalid
+                                tag = Token.Tag.invalid
                             }
                         }
 
-                        '\n'.code.toByte() -> tag = Tag.invalid
+                        '\n'.code.toByte() -> tag = Token.Tag.invalid
                         in 0x01.toByte()..0x09.toByte(),
                         in 0x0b.toByte()..0x1f.toByte(),
                         0x7f.toByte() -> {
@@ -621,11 +620,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.bang_equal
+                            tag = Token.Tag.bang_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.bang
+                        else -> tag = Token.Tag.bang
                     }
                 }
 
@@ -633,16 +632,16 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.pipe_equal
+                            tag = Token.Tag.pipe_equal
                             index += 1
                         }
 
                         '|'.code.toByte() -> {
-                            tag = Tag.pipe_pipe
+                            tag = Token.Tag.pipe_pipe
                             index += 1
                         }
 
-                        else -> tag = Tag.pipe
+                        else -> tag = Token.Tag.pipe
                     }
                 }
 
@@ -650,16 +649,16 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.equal_equal
+                            tag = Token.Tag.equal_equal
                             index += 1
                         }
 
                         '>'.code.toByte() -> {
-                            tag = Tag.equal_angle_bracket_right
+                            tag = Token.Tag.equal_angle_bracket_right
                             index += 1
                         }
 
-                        else -> tag = Tag.equal
+                        else -> tag = Token.Tag.equal
                     }
                 }
 
@@ -667,12 +666,12 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '>'.code.toByte() -> {
-                            tag = Tag.arrow
+                            tag = Token.Tag.arrow
                             index += 1
                         }
 
                         '='.code.toByte() -> {
-                            tag = Tag.minus_equal
+                            tag = Token.Tag.minus_equal
                             index += 1
                         }
 
@@ -686,7 +685,7 @@ class Tokenizer(
                             continue
                         }
 
-                        else -> tag = Tag.minus
+                        else -> tag = Token.Tag.minus
                     }
                 }
 
@@ -694,11 +693,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.minus_percent_equal
+                            tag = Token.Tag.minus_percent_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.minus_percent
+                        else -> tag = Token.Tag.minus_percent
                     }
                 }
 
@@ -706,11 +705,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.minus_pipe_equal
+                            tag = Token.Tag.minus_pipe_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.minus_pipe
+                        else -> tag = Token.Tag.minus_pipe
                     }
                 }
 
@@ -723,11 +722,11 @@ class Tokenizer(
                         }
 
                         '='.code.toByte() -> {
-                            tag = Tag.angle_bracket_left_equal
+                            tag = Token.Tag.angle_bracket_left_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.angle_bracket_left
+                        else -> tag = Token.Tag.angle_bracket_left
                     }
                 }
 
@@ -735,7 +734,7 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.angle_bracket_angle_bracket_left_equal
+                            tag = Token.Tag.angle_bracket_angle_bracket_left_equal
                             index += 1
                         }
 
@@ -744,7 +743,7 @@ class Tokenizer(
                             continue
                         }
 
-                        else -> tag = Tag.angle_bracket_angle_bracket_left
+                        else -> tag = Token.Tag.angle_bracket_angle_bracket_left
                     }
                 }
 
@@ -752,11 +751,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.angle_bracket_angle_bracket_left_pipe_equal
+                            tag = Token.Tag.angle_bracket_angle_bracket_left_pipe_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.angle_bracket_angle_bracket_left_pipe
+                        else -> tag = Token.Tag.angle_bracket_angle_bracket_left_pipe
                     }
                 }
 
@@ -769,11 +768,11 @@ class Tokenizer(
                         }
 
                         '='.code.toByte() -> {
-                            tag = Tag.angle_bracket_right_equal
+                            tag = Token.Tag.angle_bracket_right_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.angle_bracket_right
+                        else -> tag = Token.Tag.angle_bracket_right
                     }
                 }
 
@@ -781,11 +780,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '='.code.toByte() -> {
-                            tag = Tag.angle_bracket_angle_bracket_right_equal
+                            tag = Token.Tag.angle_bracket_angle_bracket_right_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.angle_bracket_angle_bracket_right
+                        else -> tag = Token.Tag.angle_bracket_angle_bracket_right
                     }
                 }
 
@@ -798,11 +797,11 @@ class Tokenizer(
                         }
 
                         '*'.code.toByte() -> {
-                            tag = Tag.period_asterisk
+                            tag = Token.Tag.period_asterisk
                             index += 1
                         }
 
-                        else -> tag = Tag.period
+                        else -> tag = Token.Tag.period
                     }
                 }
 
@@ -810,11 +809,11 @@ class Tokenizer(
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
                         '.'.code.toByte() -> {
-                            tag = Tag.ellipsis3
+                            tag = Token.Tag.ellipsis3
                             index += 1
                         }
 
-                        else -> tag = Tag.ellipsis2
+                        else -> tag = Token.Tag.ellipsis2
                     }
                 }
 
@@ -827,11 +826,11 @@ class Tokenizer(
                         }
 
                         '='.code.toByte() -> {
-                            tag = Tag.slash_equal
+                            tag = Token.Tag.slash_equal
                             index += 1
                         }
 
-                        else -> tag = Tag.slash
+                        else -> tag = Token.Tag.slash
                     }
                 }
 
@@ -843,12 +842,12 @@ class Tokenizer(
                                 state = State.invalid
                                 continue
                             } else {
-                                return Token.pack(index, index, Tag.eof)
+                                return Token.pack(index, index, Token.Tag.eof)
                             }
                         }
 
                         '!'.code.toByte() -> {
-                            tag = Tag.container_doc_comment
+                            tag = Token.Tag.container_doc_comment
                             state = State.doc_comment
                             continue
                         }
@@ -888,10 +887,10 @@ class Tokenizer(
                 State.doc_comment_start -> {
                     index += 1
                     when (if (index.value == buffer.size) 0.toByte() else buffer[index.value]) {
-                        0.toByte(), '\n'.code.toByte() -> tag = Tag.doc_comment
+                        0.toByte(), '\n'.code.toByte() -> tag = Token.Tag.doc_comment
                         '\r'.code.toByte() -> {
                             if (index.value + 1 < buffer.size && buffer[index.value + 1] == '\n'.code.toByte()) {
-                                tag = Tag.doc_comment
+                                tag = Token.Tag.doc_comment
                             } else {
                                 state = State.invalid
                                 continue
@@ -912,7 +911,7 @@ class Tokenizer(
                         }
 
                         else -> {
-                            tag = Tag.doc_comment
+                            tag = Token.Tag.doc_comment
                             state = State.doc_comment
                             continue
                         }
@@ -927,7 +926,7 @@ class Tokenizer(
                                 state = State.invalid
                                 continue
                             } else {
-                                return Token.pack(index, index, Tag.eof)
+                                return Token.pack(index, index, Token.Tag.eof)
                             }
                         }
 
