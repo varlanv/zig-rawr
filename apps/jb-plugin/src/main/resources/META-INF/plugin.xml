@@ -2,7 +2,7 @@
     <id>com.varlanv.zigrawr</id>
     <name>ZigRawr</name>
     <vendor>varlanv</vendor>
-    <description>Zig language support.</description>
+    <description>Zig language support. todotofill40charsrequirement</description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.lsp</depends>
@@ -11,15 +11,15 @@
             name="Zig"
             language="Zig"
             extensions="zig"
-            implementationClass="com.zigrawr.jbplugin.ZigFileType"
+            implementationClass="com.zigrawr.jbplugin.file.ZigFileType"
             fieldName="INSTANCE"/>
-    </extensions>
-    <extensions defaultExtensionNs="com.intellij">
         <fileType
             name="Zon"
             language="Zon"
             extensions="zon"
-            implementationClass="com.zigrawr.jbplugin.ZonFileType"
+            implementationClass="com.zigrawr.jbplugin.file.ZonFileType"
             fieldName="INSTANCE"/>
+        <platform.lsp.integrationProvider
+            implementation="com.zigrawr.jbplugin.lsp.ZigLspIntegrationProvider"/>
     </extensions>
 </idea-plugin>

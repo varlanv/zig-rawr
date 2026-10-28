@@ -4,7 +4,6 @@ intellijPlatformVersion = "2.19.0"
 jmhPluginVersion = "0.7.3"
 # JDK and bytecode version for production code and tests
 jvmVersion = "25"
-koperVersion = "0.0.1-SNAPSHOT"
 kotestVersion = "6.2.6"
 kotlinVersion = "2.4.21"
 koverVersion = "0.9.11"

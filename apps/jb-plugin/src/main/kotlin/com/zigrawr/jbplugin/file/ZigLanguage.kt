@@ -1,4 +1,4 @@
-package com.zigrawr.jbplugin
+package com.zigrawr.jbplugin.file
 
 import com.intellij.lang.Language
 

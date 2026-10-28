@@ -12,6 +12,8 @@ val isLocal = !providers.environmentVariable("CI").isPresent
 if (isLocal) {
     idea {
         module {
+            isDownloadJavadoc = true
+            isDownloadSources = true
             excludeDirs.add(rootDir.resolve(".intellijPlatform"))
         }
     }
