@@ -3,6 +3,8 @@ package com.zigrawr.zig.tokenizer
 import io.kotest.core.spec.IsolationMode
 import io.kotest.core.spec.style.ShouldSpec
 import io.kotest.engine.concurrency.TestExecutionMode
+import java.nio.file.Path
+import kotlin.io.path.createTempDirectory
 
 /**
  * Base extension point for all tests in application.
@@ -40,3 +42,16 @@ abstract class BaseSpec(body: ShouldSpec.() -> Unit) : ShouldSpec({
 })
 
 internal fun limitedConcurrency(): Int = Runtime.getRuntime().availableProcessors()
+
+/**
+ * A simple utility to run arbitrary code block with temporary directory.
+ * Directory is deleted recursively after closure exits.
+ */
+fun useTempDir(block: (Path) -> Unit) {
+    val tempDir = createTempDirectory()
+    try {
+        block(tempDir)
+    } finally {
+        tempDir.toFile().deleteRecursively()
+    }
+}

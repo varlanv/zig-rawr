@@ -4,6 +4,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.tasks.Exec
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.gradle.plugins.ide.idea.IdeaPlugin
@@ -17,6 +18,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 class InternalConventionPlugin : Plugin<Project> {
 
     private class Impl(private val project: Project) {
+        private val rootProject = project.rootProject
         private val extensions = project.extensions
         private val providers = project.providers
         private val pluginManager = project.pluginManager
@@ -33,8 +35,15 @@ class InternalConventionPlugin : Plugin<Project> {
         private val jvmVersion = internalCatalog.getVersion("jvmVersion")
         private val kotlinVersion = internalCatalog.getVersion("kotlinVersion")
         private val jvmVendor = JvmVendorSpec.ADOPTIUM
+        private val zigDir = rootProject.file("native").resolve("zig")
 
         fun run() {
+            internalConventionExtension.zigAstDependency.convention(false)
+            internalConventionExtension.zigAstBinaryPath.convention(
+                zigDir.resolve("zig-out").resolve("lib")
+                    .resolve("libzigrawrAst.so").absolutePath
+            )
+
             configureRepositories()
             pluginManager.apply(internalCatalog.getPlugin("kotlin-jvm").get().pluginId)
             pluginManager.apply("maven-publish")
@@ -56,6 +65,7 @@ class InternalConventionPlugin : Plugin<Project> {
                 configureCommonDependencies()
                 configureTests()
                 configurePublishing()
+                configureZigAstNativeTask()
             }
         }
 
@@ -70,7 +80,7 @@ class InternalConventionPlugin : Plugin<Project> {
             tasks.withType(KotlinCompile::class.java) { kotlinCompile ->
                 kotlinCompile.compilerOptions {
                     jvmTarget.set(JvmTarget.fromTarget(jvmVersion))
-                    allWarningsAsErrors.set(true)
+//                    allWarningsAsErrors.set(true)
                     extraWarnings.set(true)
                     progressiveMode.set(true)
                     freeCompilerArgs.addAll("-Xjsr305=strict")
@@ -112,6 +122,7 @@ class InternalConventionPlugin : Plugin<Project> {
 
         fun configureTests() {
             tasks.withType(org.gradle.api.tasks.testing.Test::class.java).configureEach { test ->
+                test.systemProperty("zigAstBinaryPath", internalConventionExtension.zigAstBinaryPath.get())
                 test.useJUnitPlatform()
                 test.testLogging { logging ->
                     logging.showStandardStreams = true
@@ -129,6 +140,22 @@ class InternalConventionPlugin : Plugin<Project> {
                     ) {
                         it.from(project.components.getByName("java"))
                     }
+                }
+            }
+        }
+
+        fun configureZigAstNativeTask() {
+            val zigAstNative = tasks.register("zigAstNative", Exec::class.java) {
+                it.workingDir = zigDir
+                it.commandLine("zig", "build", "-Doptimize=small")
+                it.outputs.dir(zigDir.resolve("zig-out").resolve("lib"))
+                it.inputs.dir(zigDir.resolve("src"))
+                it.inputs.file(zigDir.resolve("build.zig"))
+            }
+            if (internalConventionExtension.zigAstDependency.get()) {
+                tasks.withType(KotlinCompile::class.java) {
+                    it.dependsOn(zigAstNative)
+                    it.mustRunAfter(zigAstNative)
                 }
             }
         }

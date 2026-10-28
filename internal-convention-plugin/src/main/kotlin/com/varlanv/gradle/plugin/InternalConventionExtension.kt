@@ -8,5 +8,6 @@ interface InternalConventionExtension {
         const val NAME = "internalConvention"
     }
 
-    val mainClass: Property<String>
+    val zigAstDependency: Property<Boolean>
+    val zigAstBinaryPath: Property<String>
 }

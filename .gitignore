@@ -44,3 +44,14 @@ bin/
 ### Mac OS ###
 .DS_Store
 doc/
+
+### Zig ###
+native/zig/zig-cache/
+native/zig/.zig-cache/
+native/zig/zig-out/
+native/zig/build/
+native/zig/build-*/
+native/zig/docgen_tmp/
+native/zig/.zbscanhelper.zig
+native/zig/.idea
+native/zig/zig-pkg/
