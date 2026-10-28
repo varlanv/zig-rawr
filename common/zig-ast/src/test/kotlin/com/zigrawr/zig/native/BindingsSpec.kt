@@ -84,13 +84,13 @@ class BindingsSpec : BaseSpec({
             tokensSeen shouldBe ast.tokenCount()
 
             var nodesSeen = 0
-            ast.forEachNode { index, tag, mainToken, first, second ->
+            ast.forEachNode { index, tag, mainToken, payloadWord0, payloadWord1 ->
                 index shouldBe nodesSeen
                 tag shouldBe ast.nodeTag(index)
                 mainToken shouldBe ast.nodeMainToken(index)
                 if (index == 0) {
-                    first shouldBe 0
-                    second shouldBe 1
+                    payloadWord0 shouldBe 0
+                    payloadWord1 shouldBe 1
                 }
                 nodesSeen++
             }

@@ -377,6 +377,45 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
         checkSection(56, 28, 24)
     }
 
+    /**
+     * `nodeIndex` is the node index, `nodeTag` its kind, and `tokenIndex` its main token index.
+     * `payloadWord0` and `payloadWord1` are raw values interpreted according to `nodeTag`.
+     * Inlined so that caller stays on stack.
+     */
+    inline fun forEachNode(block: (nodeIndex: Int, nodeTag: NodeTag, tokenIndex: Int, payloadWord0: Int, payloadWord1: Int) -> Unit) {
+        var index = 0
+        val count = nodeCount()
+        val tagsOffset = bytes.getPackedInt(40)
+        val mainTokensOffset = bytes.getPackedInt(44)
+        val payloadsOffset = bytes.getPackedInt(48)
+        while (index < count) {
+            val tag = NodeTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
+            val mainToken = bytes.getPackedInt(mainTokensOffset + index * 4)
+            val payloadOffset = payloadsOffset + index * 8
+            val payloadWord0 = bytes.getPackedInt(payloadOffset)
+            val payloadWord1 = bytes.getPackedInt(payloadOffset + 4)
+            block(index, tag, mainToken, payloadWord0, payloadWord1)
+            index++
+        }
+    }
+
+    /**
+     * `tokenIndex` is the token index, `tokenTag` its kind, and `startByte` its UTF-8 byte offset.
+     * Inlined so that caller stays on stack.
+     */
+    inline fun forEachToken(block: (tokenIndex: Int, tokenTag: TokenTag, startByte: Int) -> Unit) {
+        var index = 0
+        val count = tokenCount()
+        val tagsOffset = bytes.getPackedInt(32)
+        val startsOffset = bytes.getPackedInt(36)
+        while (index < count) {
+            val tag = TokenTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
+            val start = bytes.getPackedInt(startsOffset + index * 4)
+            block(index, tag, start)
+            index++
+        }
+    }
+
     fun mode(): Mode = Mode.entries[word(8)]
 
     fun sourceLength(): Int = word(12)
@@ -393,37 +432,9 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
 
     fun tokenStart(index: Int): Int = word(entryOffset(index, 16, 36, 4))
 
-    inline fun forEachToken(block: (tokenIndex: Int, tokenTag: TokenTag, startByte: Int) -> Unit) {
-        var index = 0
-        val count = tokenCount()
-        val tagsOffset = bytes.getPackedInt(32)
-        val startsOffset = bytes.getPackedInt(36)
-        while (index < count) {
-            val tag = TokenTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
-            val start = bytes.getPackedInt(startsOffset + index * 4)
-            block(index, tag, start)
-            index++
-        }
-    }
-
     fun nodeTag(index: Int): NodeTag = NodeTag.entries[bytes[entryOffset(index, 20, 40, 1)].toInt() and 0xFF]
 
     fun nodeMainToken(index: Int): Int = word(entryOffset(index, 20, 44, 4))
-
-    inline fun forEachNode(block: (nodeIndex: Int, nodeTag: NodeTag, tokenIndex: Int, first: Int, second: Int) -> Unit) {
-        var index = 0
-        val count = nodeCount()
-        val tagsOffset = bytes.getPackedInt(40)
-        val mainTokensOffset = bytes.getPackedInt(44)
-        val payloadsOffset = bytes.getPackedInt(48)
-        while (index < count) {
-            val tag = NodeTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
-            val mainToken = bytes.getPackedInt(mainTokensOffset + index * 4)
-            val payloadOffset = payloadsOffset + index * 8
-            block(index, tag, mainToken, bytes.getPackedInt(payloadOffset), bytes.getPackedInt(payloadOffset + 4))
-            index++
-        }
-    }
 
     fun extraData(index: Int): Int = word(entryOffset(index, 24, 52, 4))
 
