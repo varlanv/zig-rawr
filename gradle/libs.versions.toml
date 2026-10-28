@@ -12,6 +12,7 @@ shadowPluginVersion = "9.6.1"
 versionCatalogPluginVersion = "1.1.2"
 
 [libraries]
+intellij-platform-gradle = { module = "org.jetbrains.intellij.platform:intellij-platform-gradle-plugin", version.ref = "intellijPlatformVersion" }
 kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlinVersion" }
 kotlin-gradle-main = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlinVersion" }
 kotlin-kotest-assertionsCore = { module = "io.kotest:kotest-assertions-core", version.ref = "kotestVersion" }

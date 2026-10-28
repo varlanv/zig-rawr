@@ -3,10 +3,13 @@ package com.varlanv.gradle.plugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.plugins.ExtensionAware
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.gradle.plugins.ide.idea.IdeaPlugin
 import org.gradle.plugins.ide.idea.model.IdeaModel
+import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformDependenciesExtension
+import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -35,6 +38,18 @@ class InternalConventionPlugin : Plugin<Project> {
             configureRepositories()
             pluginManager.apply(internalCatalog.getPlugin("kotlin-jvm").get().pluginId)
             pluginManager.apply("maven-publish")
+            pluginManager.withPlugin("org.jetbrains.intellij.platform") {
+                repositories.intellijPlatform {
+                    it.defaultRepositories()
+                }
+
+                (dependencies as ExtensionAware).extensions.configure(
+                    IntelliJPlatformDependenciesExtension::class.java
+                ) {
+                    it.clion(internalCatalog.getVersion("clionVersion"))
+                    it.bundledModule("com.intellij.modules.lsp")
+                }
+            }
             project.afterEvaluate {
                 applyCommonPlugins()
                 configureKotlin()

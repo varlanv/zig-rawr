@@ -29,6 +29,7 @@ repositories {
 
 dependencies {
     implementation(libs.kotlin.gradle.main)
+    implementation(libs.intellij.platform.gradle)
 }
 
 gradlePlugin {

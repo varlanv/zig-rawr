@@ -1,4 +1,4 @@
-package com.varlanv.zigrawr.jbplugin
+package com.zigrawr.jbplugin
 
 import com.intellij.openapi.fileTypes.LanguageFileType
 import javax.swing.Icon
