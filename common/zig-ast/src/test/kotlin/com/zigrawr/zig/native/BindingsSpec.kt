@@ -1,11 +1,18 @@
 package com.zigrawr.zig.native
 
+import com.zigrawr.lang.bin.asList
 import com.zigrawr.lang.bin.asReadonly
 import com.zigrawr.zig.ast.ParseMode
 import com.zigrawr.zig.tokenizer.BaseSpec
 import com.zigrawr.zig.tokenizer.useTempDir
 import io.kotest.matchers.shouldBe
+import java.lang.foreign.MemorySegment
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.MethodType
 import java.nio.file.Files
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 val handles = Loader.load()
 
@@ -97,4 +104,108 @@ class BindingsSpec : BaseSpec({
             nodesSeen shouldBe ast.nodeCount()
         }
     }
+
+    should("parse once per call even when the snapshot grows") {
+        val counter = ParseCallCounter()
+        val countedBindings = Bindings(counter.wrap(handles))
+        try {
+            val small = "const x = 1;"
+            val large = buildString {
+                repeat(1000) { append("const x$it = $it;\n") }
+            }
+
+            countedBindings.parseChars(small, ParseMode.Zig)
+            val afterFirst = counter.calls
+            afterFirst shouldBe 1
+            countedBindings.parseChars(small, ParseMode.Zig)
+            counter.calls shouldBe afterFirst + 1
+
+            val grown = countedBindings.parseChars(large, ParseMode.Zig)
+            counter.calls shouldBe afterFirst + 2
+            grown.size shouldBe grown.getPackedInt(60)
+            NativeAst(grown).sourceLength() shouldBe large.length
+
+            countedBindings.parseChars(large, ParseMode.Zig)
+            counter.calls shouldBe afterFirst + 3
+
+            val shrunk = countedBindings.parseChars(small, ParseMode.Zig)
+            counter.calls shouldBe afterFirst + 4
+            shrunk.size shouldBe shrunk.getPackedInt(60)
+            NativeAst(shrunk).sourceLength() shouldBe small.length
+        } finally {
+            countedBindings.close()
+        }
+    }
+
+    should("keep returned snapshots valid after later parses and close") {
+        val bindings = Bindings(handles)
+        val snapshot = try {
+            val first = bindings.parseChars("const x = \"π\";", ParseMode.Zig)
+            val original = first.asList().toList()
+            bindings.parseChars(".{ .answer = 42 }", ParseMode.Zon)
+            bindings.parseChars("const = ;".repeat(1000), ParseMode.Zig)
+            first.asList() shouldBe original
+            first
+        } finally {
+            bindings.close()
+        }
+        NativeAst(snapshot).sourceLength() shouldBe 15
+        NativeAst(snapshot).errorCount() shouldBe 0
+    }
+
+    should("parse concurrently through the same bindings instance") {
+        val sources = List(4) { index ->
+            buildString {
+                repeat((index + 1) * 50) { append("const x$it = \"π$index\";\n") }
+            }
+        }
+        val reference = Bindings(handles)
+        val expected = try {
+            sources.map { reference.parseChars(it, ParseMode.Zig).asList().toList() }
+        } finally {
+            reference.close()
+        }
+        useBindings { bindings ->
+            val start = CyclicBarrier(sources.size)
+            Executors.newFixedThreadPool(sources.size).use { executor ->
+                val futures = sources.mapIndexed { index, source ->
+                    executor.submit {
+                        start.await(10, TimeUnit.SECONDS)
+                        val bytes = source.toByteArray().asReadonly()
+                        repeat(30) { iteration ->
+                            val snapshot = if (iteration % 2 == 0) {
+                                bindings.parseChars(source, ParseMode.Zig)
+                            } else {
+                                bindings.parseBytes(bytes, ParseMode.Zig)
+                            }
+                            snapshot.asList() shouldBe expected[index]
+                        }
+                    }
+                }
+                futures.forEach { it.get(30, TimeUnit.SECONDS) }
+            }
+        }
+    }
 })
+
+private class ParseCallCounter {
+    var calls = 0
+        private set
+
+    fun record(result: MemorySegment): MemorySegment {
+        calls++
+        return result
+    }
+
+    fun wrap(handles: Handles): Handles {
+        val record = MethodHandles.lookup().findVirtual(
+            ParseCallCounter::class.java,
+            "record",
+            MethodType.methodType(MemorySegment::class.java, MemorySegment::class.java),
+        ).bindTo(this)
+        return Handles(
+            handles.zrInit, handles.zrClose,
+            MethodHandles.filterReturnValue(handles.zrParse, record), handles.zrFree, handles.zrAllocInput,
+        )
+    }
+}

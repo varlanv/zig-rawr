@@ -2,12 +2,19 @@ package com.zigrawr.zig.native
 
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.MemoryLayout
+import java.lang.foreign.StructLayout
 import java.lang.foreign.ValueLayout
 
 object Layout {
 
     object Data {
-        val zrSnapshotHeader = MemoryLayout.structLayout(
+        val zrParseResult: StructLayout = MemoryLayout.structLayout(
+            ValueLayout.ADDRESS.withName("data"),
+            ValueLayout.JAVA_LONG.withName("size"),
+            ValueLayout.JAVA_INT.withName("status"),
+            MemoryLayout.paddingLayout(4),
+        )
+        val zrSnapshotHeader: StructLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("magic"),
             ValueLayout.JAVA_INT.withName("abiVersion"),
             ValueLayout.JAVA_INT.withName("mode"),
@@ -25,11 +32,11 @@ object Layout {
             ValueLayout.JAVA_INT.withName("errorsOffset"),
             ValueLayout.JAVA_INT.withName("totalSize"),
         )
-        val zrNodePayload = MemoryLayout.structLayout(
+        val zrNodePayload: StructLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("first"),
             ValueLayout.JAVA_INT.withName("second"),
         )
-        val zrErrorView = MemoryLayout.structLayout(
+        val zrErrorView: StructLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("tag"),
             ValueLayout.JAVA_INT.withName("token"),
             ValueLayout.JAVA_INT.withName("flags"),
@@ -40,17 +47,17 @@ object Layout {
 
     object Functions {
 
-        val zrInit = FunctionDescriptor.of(ValueLayout.ADDRESS)
-        val zrClose = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
-        val zrParse = FunctionDescriptor.of(
-            ValueLayout.JAVA_INT,
+        val zrInit: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.ADDRESS)
+        val zrClose: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        val zrParse: FunctionDescriptor = FunctionDescriptor.of(
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
-            ValueLayout.JAVA_LONG,
-            ValueLayout.JAVA_INT,
             ValueLayout.ADDRESS,
             ValueLayout.JAVA_LONG,
-            ValueLayout.ADDRESS,
+            ValueLayout.JAVA_INT,
         )
+        val zrFree: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        val zrAllocInput: FunctionDescriptor =
+            FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG)
     }
 }

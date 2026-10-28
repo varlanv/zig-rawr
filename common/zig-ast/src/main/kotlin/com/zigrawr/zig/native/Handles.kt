@@ -6,4 +6,6 @@ class Handles(
     val zrInit: MethodHandle,
     val zrClose: MethodHandle,
     val zrParse: MethodHandle,
+    val zrFree: MethodHandle,
+    val zrAllocInput: MethodHandle,
 )

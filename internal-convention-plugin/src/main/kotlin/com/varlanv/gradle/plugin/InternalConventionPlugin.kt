@@ -147,7 +147,7 @@ class InternalConventionPlugin : Plugin<Project> {
         fun configureZigAstNativeTask() {
             val zigAstNative = tasks.register("zigAstNative", Exec::class.java) {
                 it.workingDir = zigDir
-                it.commandLine("zig", "build", "-Doptimize=small")
+                it.commandLine("zig", "build", "-Doptimize=fast", "-Dstrip=true")
                 it.outputs.dir(zigDir.resolve("zig-out").resolve("lib"))
                 it.inputs.dir(zigDir.resolve("src"))
                 it.inputs.file(zigDir.resolve("build.zig"))

@@ -15,7 +15,8 @@ object Loader {
         val zrInit = linker.downcallHandle(lib.findOrThrow("zrInit"), Layout.Functions.zrInit)
         val zrClose = linker.downcallHandle(lib.findOrThrow("zrClose"), Layout.Functions.zrClose)
         val zrParse = linker.downcallHandle(symbol, Layout.Functions.zrParse)
-
-        return Handles(zrInit, zrClose, zrParse)
+        val zrFree = linker.downcallHandle(lib.findOrThrow("zrFree"), Layout.Functions.zrFree)
+        val zrAllocInput = linker.downcallHandle(lib.findOrThrow("zrAllocInput"), Layout.Functions.zrAllocInput)
+        return Handles(zrInit, zrClose, zrParse, zrFree, zrAllocInput)
     }
 }

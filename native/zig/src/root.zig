@@ -1,79 +1,79 @@
 const std = @import("std");
 const Ast = @import("upstream/Ast.zig");
 const Token = @import("upstream/tokenizer.zig").Token;
-
 const Allocator = std.mem.Allocator;
 
-comptime {
-    std.debug.assert(@sizeOf(Token.Tag) == 1);
-    std.debug.assert(@sizeOf(Ast.Node.Tag) == 1);
-}
-
-pub const State = struct {
-    allocator: Allocator,
+/// Small state-tracking to prevent invalid state transitions.
+/// Expected normal state flow should be like this:
+/// init -> allocate + (optionally) parse -> free -> allocate + (optionally) parse -> free ... close
+pub const StateTag = enum {
+    init,
+    allocate,
+    parse,
+    free,
+    closed,
 };
 
-pub const ErrorView = extern struct {
-    tag: u32,
-    token: u32,
-    flags: u32,
-    extraKind: u32,
-    extraValue: u64,
+/// State of single scope, returned by `zrInit`. Not threadsafe, downstream consumers should control
+/// Valid until `zrClose` call.
+pub const ScopedState = struct {
+    arena: std.heap.ArenaAllocator,
+    result: ParseResult = .{},
+    tag: StateTag = .init,
 };
 
-pub const NodePayload = extern struct {
-    first: u32,
-    second: u32,
+/// Snapshot storage is owned by State and remains valid until zrFree or zrClose.
+pub const ParseResult = extern struct {
+    data: ?[*]const u8 = null,
+    size: usize = 0,
+    status: u32 = 0,
 };
 
-pub const SnapshotHeader = extern struct {
-    magic: u32,
-    abiVersion: u32,
-    mode: u32,
-    sourceLen: u32,
-    tokenCount: u32,
-    nodeCount: u32,
-    extraDataCount: u32,
-    errorCount: u32,
-    tokenTagsOffset: u32,
-    tokenStartsOffset: u32,
-    nodeTagsOffset: u32,
-    nodeMainTokensOffset: u32,
-    nodePayloadsOffset: u32,
-    extraDataOffset: u32,
-    errorsOffset: u32,
-    totalSize: u32,
-};
-
-const Layout = struct {
-    tokenTags: u32,
-    tokenStarts: u32,
-    nodeTags: u32,
-    nodeMainTokens: u32,
-    nodePayloads: u32,
-    extraData: u32,
-    errors: u32,
-    totalSize: u32,
-};
-
-comptime {
-    // sanity check because this assumption needs to hold on Kotlin side as well
-    std.debug.assert(@sizeOf(SnapshotHeader) == 64);
-    std.debug.assert(@sizeOf(NodePayload) == 8);
-    std.debug.assert(@sizeOf(ErrorView) == 24);
-}
-
-pub export fn zrInit() ?*State {
-    const state = std.heap.page_allocator.create(State) catch return null;
-    state.* = .{
-        .allocator = std.heap.smp_allocator,
+/// Extern view on the parsed AST. Scoped under ASTData for convenience.
+pub const ASTData = struct {
+    pub const ErrorView = extern struct {
+        tag: u32,
+        token: u32,
+        flags: u32,
+        extraKind: u32,
+        extraValue: u64,
     };
-    return state;
-}
 
-pub export fn zrClose(state: *State) void {
-    std.heap.page_allocator.destroy(state);
-}
+    pub const NodePayload = extern struct {
+        first: u32,
+        second: u32,
+    };
+
+    pub const SnapshotHeader = extern struct {
+        magic: u32,
+        abiVersion: u32,
+        mode: u32,
+        sourceLen: u32,
+        tokenCount: u32,
+        nodeCount: u32,
+        extraDataCount: u32,
+        errorCount: u32,
+        tokenTagsOffset: u32,
+        tokenStartsOffset: u32,
+        nodeTagsOffset: u32,
+        nodeMainTokensOffset: u32,
+        nodePayloadsOffset: u32,
+        extraDataOffset: u32,
+        errorsOffset: u32,
+        totalSize: u32,
+    };
+
+    const Layout = struct {
+        tokenTags: u32,
+        tokenStarts: u32,
+        nodeTags: u32,
+        nodeMainTokens: u32,
+        nodePayloads: u32,
+        extraData: u32,
+        errors: u32,
+        totalSize: u32,
+    };
+};
 
 pub const Mode = enum(u32) {
     zig = 0,
@@ -81,37 +81,106 @@ pub const Mode = enum(u32) {
     _,
 };
 
+/// *handshake* sanity check value so that consumer can check correctness against native binary.
+const MAGIC = 0x5A524153;
+
+comptime {
+    // sanity check because this assumptions need to hold on Kotlin side as well
+    std.debug.assert(@sizeOf(ASTData.SnapshotHeader) == 64);
+    std.debug.assert(@sizeOf(ASTData.NodePayload) == 8);
+    std.debug.assert(@sizeOf(ASTData.ErrorView) == 24);
+    std.debug.assert(@sizeOf(ParseResult) == 24);
+    std.debug.assert(@sizeOf(Token.Tag) == 1);
+    std.debug.assert(@sizeOf(Ast.Node.Tag) == 1);
+}
+
+/// Entrypoint to create single parse scope. Returned state is not thread-safe
+pub export fn zrInit() ?*ScopedState {
+    const state = std.heap.page_allocator.create(ScopedState) catch return null;
+    state.* = .{
+        .arena = .init(std.heap.smp_allocator),
+    };
+    return state;
+}
+
+pub export fn zrClose(state: *ScopedState) void {
+    // allowing transition from any state, including .closed, to guarantee resources cleanup
+    if (state.tag != .closed) {
+        state.tag = .closed;
+        state.arena.deinit();
+        std.heap.page_allocator.destroy(state);
+    }
+}
+
+/// Resets per-call allocations, retaining capacity for reuse.
+/// Failing to call this after calling `zrParse` will result in undefined behavior on in consumer library
+pub export fn zrFree(state: *ScopedState) void {
+    if (state.tag != .parse and state.tag != .init and state.tag != .allocate and state.tag != .free) {
+        panicOnInvaliStateTransition(state.tag, .free);
+    }
+    state.tag = .free;
+    state.result = .{};
+    _ = state.arena.reset(.retain_capacity);
+}
+
+/// Reserves input plus its zero sentinel. Older input allocations remain valid until zrFree.
+pub export fn zrAllocInput(state: *ScopedState, sourceLen: usize) ?[*:0]u8 {
+    if (state.tag != .free and state.tag != .init and state.tag != .allocate) {
+        panicOnInvaliStateTransition(state.tag, .allocate);
+    }
+    state.tag = .allocate;
+    if (sourceLen > std.math.maxInt(u32)) return null;
+    const size = std.math.cast(u32, sourceLen) orelse return null;
+    const input = state.arena.allocator().allocSentinel(u8, size, 0) catch return null;
+    return input.ptr;
+}
+
 pub export fn zrParse(
-    state: *State,
+    state: *ScopedState,
     sourcePtr: ?[*]const u8,
     sourceLen: usize,
     mode: Mode,
-    outputPtr: ?[*]u8,
-    outputCapacity: usize,
-    requiredSize: *usize,
-) u32 {
-    requiredSize.* = 0;
-    if (sourceLen > std.math.maxInt(u32)) return 1;
+) *const ParseResult {
+    if (state.tag != .allocate) {
+        panicOnInvaliStateTransition(state.tag, .parse);
+    }
+    state.tag = .parse;
+    const result = &state.result;
+    result.* = .{ .status = 1 };
+    if (sourceLen > std.math.maxInt(u32)) return result;
     const parseMode: Ast.Mode = switch (mode) {
         .zig => .zig,
         .zon => .zon,
-        else => return 1,
+        else => return result,
     };
-    const source: [:0]const u8 = if (sourcePtr) |ptr| blk: {
-        if (ptr[sourceLen] != 0) return 1;
-        break :blk ptr[0..sourceLen :0];
-    } else if (sourceLen == 0) "" else return 1;
-    return parseInto(
-        state.allocator,
+    if (sourcePtr == null and sourceLen != 0) return result;
+    const ptr = sourcePtr orelse "".ptr;
+    if (ptr[sourceLen] != 0) return result;
+    const source = ptr[0..sourceLen :0];
+    const output = parseInto(
+        state.arena.allocator(),
         source,
         parseMode,
-        outputPtr,
-        outputCapacity,
-        requiredSize,
-    ) catch |err| switch (err) {
-        error.TooLarge => 1,
-        error.OutOfMemory => 3,
+    ) catch |err| {
+        result.status = switch (err) {
+            error.TooLarge => 1,
+            error.OutOfMemory => 3,
+        };
+        return result;
     };
+    result.* = .{ .data = output.ptr, .size = output.len };
+    return result;
+}
+
+fn panicOnInvaliStateTransition(
+    currentState: StateTag,
+    newState: StateTag,
+) noreturn {
+    // TODO - we should not panic on failure because it will crash host application; need to integrate return codes instead.
+    std.debug.panic(
+        "Illegal state transition attempt: {s} -> {s}",
+        .{ @tagName(currentState), @tagName(newState) },
+    );
 }
 
 fn reserve(cursor: *usize, alignment: usize, count: usize, itemSize: usize) error{TooLarge}!u32 {
@@ -123,20 +192,20 @@ fn reserve(cursor: *usize, alignment: usize, count: usize, itemSize: usize) erro
     return @intCast(start);
 }
 
-fn layoutFor(ast: *const Ast) error{TooLarge}!Layout {
+fn layoutFor(ast: *const Ast) error{TooLarge}!ASTData.Layout {
     if (ast.tokens.len > std.math.maxInt(u32) or
         ast.nodes.len > std.math.maxInt(u32) or
         ast.extra_data.len > std.math.maxInt(u32) or
         ast.errors.len > std.math.maxInt(u32)) return error.TooLarge;
 
-    var cursor: usize = @sizeOf(SnapshotHeader);
+    var cursor: usize = @sizeOf(ASTData.SnapshotHeader);
     const tokenTags = try reserve(&cursor, 1, ast.tokens.len, 1);
     const tokenStarts = try reserve(&cursor, 4, ast.tokens.len, 4);
     const nodeTags = try reserve(&cursor, 1, ast.nodes.len, 1);
     const nodeMainTokens = try reserve(&cursor, 4, ast.nodes.len, 4);
-    const nodePayloads = try reserve(&cursor, 4, ast.nodes.len, @sizeOf(NodePayload));
+    const nodePayloads = try reserve(&cursor, 4, ast.nodes.len, @sizeOf(ASTData.NodePayload));
     const extraData = try reserve(&cursor, 4, ast.extra_data.len, 4);
-    const errors = try reserve(&cursor, 8, ast.errors.len, @sizeOf(ErrorView));
+    const errors = try reserve(&cursor, 8, ast.errors.len, @sizeOf(ASTData.ErrorView));
     return .{
         .tokenTags = tokenTags,
         .tokenStarts = tokenStarts,
@@ -153,22 +222,12 @@ fn parseInto(
     gpa: Allocator,
     source: [:0]const u8,
     mode: Ast.Mode,
-    outputPtr: ?[*]u8,
-    outputCapacity: usize,
-    requiredSize: *usize,
-) (error{ TooLarge, OutOfMemory })!u32 {
-    var ast = try Ast.parse(gpa, source, .{ .mode = mode });
-    defer ast.deinit(gpa);
-
+) (error{ TooLarge, OutOfMemory })![]align(8) u8 {
+    const ast = try Ast.parse(gpa, source, .{ .mode = mode });
     const layout = try layoutFor(&ast);
-    requiredSize.* = layout.totalSize;
-    if (outputCapacity < layout.totalSize or outputPtr == null) return 2;
-    const ptr = outputPtr.?;
-    if ((@intFromPtr(ptr) & 7) != 0) return 1;
-    const output = ptr[0..layout.totalSize];
-
-    const header: SnapshotHeader = .{
-        .magic = 0x5A524153,
+    const output = try gpa.alignedAlloc(u8, .@"8", layout.totalSize);
+    const header: ASTData.SnapshotHeader = .{
+        .magic = MAGIC,
         .abiVersion = 2,
         .mode = @backingInt(mode),
         .sourceLen = @intCast(source.len),
@@ -185,36 +244,39 @@ fn parseInto(
         .errorsOffset = layout.errors,
         .totalSize = layout.totalSize,
     };
-    @memcpy(output[0..@sizeOf(SnapshotHeader)], std.mem.asBytes(&header));
+    @memcpy(output[0..@sizeOf(ASTData.SnapshotHeader)], std.mem.asBytes(&header));
 
     const tokenTags: []const u8 = @as([*]const u8, @ptrCast(ast.tokens.items(.tag).ptr))[0..ast.tokens.len];
     @memcpy(output[layout.tokenTags..][0..tokenTags.len], tokenTags);
+    @memset(output[layout.tokenTags + tokenTags.len .. layout.tokenStarts], 0);
     const tokenStarts = std.mem.sliceAsBytes(ast.tokens.items(.start));
     @memcpy(output[layout.tokenStarts..][0..tokenStarts.len], tokenStarts);
 
     const nodeTags: []const u8 = @as([*]const u8, @ptrCast(ast.nodes.items(.tag).ptr))[0..ast.nodes.len];
     @memcpy(output[layout.nodeTags..][0..nodeTags.len], nodeTags);
+    @memset(output[layout.nodeTags + nodeTags.len .. layout.nodeMainTokens], 0);
     const nodeMainTokens = std.mem.sliceAsBytes(ast.nodes.items(.main_token));
     @memcpy(output[layout.nodeMainTokens..][0..nodeMainTokens.len], nodeMainTokens);
 
     for (0..ast.nodes.len) |index| {
         const payload = nodePayload(&ast, index);
-        const start = @as(usize, layout.nodePayloads) + index * @sizeOf(NodePayload);
-        @memcpy(output[start..][0..@sizeOf(NodePayload)], std.mem.asBytes(&payload));
+        const start = @as(usize, layout.nodePayloads) + index * @sizeOf(ASTData.NodePayload);
+        @memcpy(output[start..][0..@sizeOf(ASTData.NodePayload)], std.mem.asBytes(&payload));
     }
 
     const extraData = std.mem.sliceAsBytes(ast.extra_data);
     @memcpy(output[layout.extraData..][0..extraData.len], extraData);
+    @memset(output[layout.extraData + extraData.len .. layout.errors], 0);
 
     for (ast.errors, 0..) |err, index| {
         const view = errorView(err);
-        const start = @as(usize, layout.errors) + index * @sizeOf(ErrorView);
-        @memcpy(output[start..][0..@sizeOf(ErrorView)], std.mem.asBytes(&view));
+        const start = @as(usize, layout.errors) + index * @sizeOf(ASTData.ErrorView);
+        @memcpy(output[start..][0..@sizeOf(ASTData.ErrorView)], std.mem.asBytes(&view));
     }
-    return 0;
+    return output;
 }
 
-fn errorView(err: Ast.Error) ErrorView {
+fn errorView(err: Ast.Error) ASTData.ErrorView {
     const extraKind: u32, const extraValue: u64 = switch (err.tag) {
         .expected_token => .{ 1, @backingInt(err.extra.expected_tag) },
         .invalid_byte => .{ 2, err.extra.offset },
@@ -238,15 +300,15 @@ fn word(value: anytype) u32 {
     };
 }
 
-fn one(value: anytype) NodePayload {
+fn one(value: anytype) ASTData.NodePayload {
     return .{ .first = word(value), .second = 0 };
 }
 
-fn two(value: anytype) NodePayload {
+fn two(value: anytype) ASTData.NodePayload {
     return .{ .first = word(value[0]), .second = word(value[1]) };
 }
 
-fn nodePayload(ast: *const Ast, index: usize) NodePayload {
+fn nodePayload(ast: *const Ast, index: usize) ASTData.NodePayload {
     const tag = ast.nodes.items(.tag)[index];
     const data = ast.nodes.items(.data)[index];
     return switch (tag) {
@@ -440,33 +502,19 @@ fn nodePayload(ast: *const Ast, index: usize) NodePayload {
     };
 }
 
-fn testSnapshot(source: [:0]const u8, mode: Mode, minimumNodes: u32) !void {
-    var state: State = .{ .allocator = std.testing.allocator };
-    var requiredSize: usize = 0;
-    try std.testing.expectEqual(@as(u32, 2), zrParse(
-        &state,
-        source.ptr,
-        source.len,
-        mode,
-        null,
-        0,
-        &requiredSize,
-    ));
-    try std.testing.expect(requiredSize >= @sizeOf(SnapshotHeader));
+fn testSnapshot(state: *ScopedState, source: [:0]const u8, mode: Mode, minimumNodes: u32) !void {
+    defer zrFree(state);
+    const input = zrAllocInput(state, source.len) orelse return error.OutOfMemory;
+    @memcpy(input[0..source.len], source);
 
-    const output = try std.testing.allocator.alignedAlloc(u8, .@"8", requiredSize);
-    defer std.testing.allocator.free(output);
-    try std.testing.expectEqual(@as(u32, 0), zrParse(
-        &state,
-        source.ptr,
-        source.len,
-        mode,
-        output.ptr,
-        output.len,
-        &requiredSize,
-    ));
-    const header: *const SnapshotHeader = @ptrCast(output.ptr);
-    try std.testing.expectEqual(@as(u32, 0x5A524153), header.magic);
+    const result = zrParse(state, input, source.len, mode);
+
+    try std.testing.expectEqual(@as(u32, 0), result.status);
+    try std.testing.expect(result.size >= @sizeOf(ASTData.SnapshotHeader));
+    const output = result.data.?[0..result.size];
+    const header: *const ASTData.SnapshotHeader = @ptrCast(@alignCast(output.ptr));
+
+    try std.testing.expectEqual(@as(u32, MAGIC), header.magic);
     try std.testing.expectEqual(@as(u32, 2), header.abiVersion);
     try std.testing.expectEqual(@as(u32, @backingInt(mode)), header.mode);
     try std.testing.expectEqual(@as(u32, @intCast(output.len)), header.totalSize);
@@ -475,18 +523,87 @@ fn testSnapshot(source: [:0]const u8, mode: Mode, minimumNodes: u32) !void {
     try std.testing.expectEqual(@as(u8, 0), output[header.nodeTagsOffset]);
 }
 
-test "parse into a caller-owned snapshot" {
-    try testSnapshot("const answer = 42;", .zig, 3);
-    try testSnapshot(".{ .answer = 42 }", .zon, 2);
-    try testSnapshot("const = ;", .zig, 1);
+test "parse into a state-owned snapshot and retain capacity after free" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+
+    try testSnapshot(&state, "const answer = 42;", .zig, 3);
+    try std.testing.expect(state.arena.queryCapacity() > 0);
+    try testSnapshot(&state, ".{ .answer = 42 }", .zon, 2);
+    try testSnapshot(&state, "const = ;", .zig, 1);
+    try testSnapshot(&state, "", .zig, 1);
 }
 
 test "snapshot parses copied parser sources" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
     inline for (.{
         @embedFile("upstream/Ast.zig"),
         @embedFile("upstream/Parse.zig"),
         @embedFile("upstream/tokenizer.zig"),
     }) |source| {
-        try testSnapshot(source, .zig, 100);
+        try testSnapshot(&state, source, .zig, 100);
     }
+}
+
+test "failed parse clears the result and state can be reused after free" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+    state.result = .{ .data = "stale".ptr, .size = 5 };
+    const result = zrParse(&state, null, 1, .zig);
+
+    try std.testing.expectEqual(@as(u32, 1), result.status);
+    try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
+    try std.testing.expectEqual(@as(usize, 0), result.size);
+
+    zrFree(&state);
+    try testSnapshot(&state, "const answer = 42;", .zig, 3);
+}
+
+test "warm state reuses arena capacity without backing allocations" {
+    var backing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    var state: ScopedState = .{ .arena = .init(backing.allocator()) };
+    defer state.arena.deinit();
+    const source = @embedFile("upstream/tokenizer.zig");
+
+    for (0..3) |_| try testSnapshot(&state, source, .zig, 100);
+    const allocations = backing.allocations;
+    backing.fail_index = backing.alloc_index;
+
+    for (0..3) |_| try testSnapshot(&state, source, .zig, 100);
+    try std.testing.expect(!backing.has_induced_failure);
+    try std.testing.expectEqual(allocations, backing.allocations);
+}
+
+test "out of memory returns no snapshot and permits reuse after free" {
+    var backing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    var state: ScopedState = .{ .arena = .init(backing.allocator()) };
+    defer state.arena.deinit();
+    const source = "const answer = 42;";
+    const result = zrParse(&state, source.ptr, source.len, .zig);
+
+    try std.testing.expectEqual(@as(u32, 3), result.status);
+    try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
+    try std.testing.expectEqual(@as(usize, 0), result.size);
+    zrFree(&state);
+
+    try std.testing.expectEqual(@as(?[*]u8, null), zrAllocInput(&state, source.len));
+    zrFree(&state);
+    backing.fail_index = std.math.maxInt(usize);
+
+    try testSnapshot(&state, source, .zig, 3);
+}
+
+test "growing input preserves previous allocations until free" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+    const input = zrAllocInput(&state, 3) orelse return error.OutOfMemory;
+    @memcpy(input[0..3], "abc");
+    const expanded = zrAllocInput(&state, 1000) orelse return error.OutOfMemory;
+    @memcpy(expanded[0..3], input[0..3]);
+
+    try std.testing.expectEqualStrings("abc", expanded[0..3]);
+    try std.testing.expectEqual(@as(u8, 0), expanded[1000]);
+
+    zrFree(&state);
 }

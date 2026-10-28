@@ -2,6 +2,11 @@ package com.zigrawr.zig.native
 
 import com.zigrawr.lang.bin.MutBytes
 
+/**
+ * *handshake* sanity check value to check correctness against native binary.
+ */
+const val AST_MAGIC = 0x5A524153
+
 @JvmInline
 value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
 
@@ -363,7 +368,7 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
 
     init {
         require(bytes.size >= 64)
-        require(bytes.getPackedInt(0) == 0x5A524153)
+        require(bytes.getPackedInt(0) == AST_MAGIC)
         require(bytes.getPackedInt(4) == 2)
         require(bytes.getPackedInt(8) in 0..1)
         require(bytes.getPackedInt(12) >= 0)
