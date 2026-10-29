@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-
 //! Abstract Syntax Tree for Zig source code.
 //! For Zig syntax, the root node is at nodes[0] and contains the list of
 //! sub-nodes.

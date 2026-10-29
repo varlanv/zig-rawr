@@ -2,6 +2,7 @@ const std = @import("std");
 const Ast = @import("ziglang/Ast.zig");
 const shared = @import("shared.zig");
 const export_ast = @import("export_ast.zig");
+const utf_conversion = @import("utf_conversion.zig");
 const Allocator = std.mem.Allocator;
 const ParseResult = export_ast.ParseResult;
 const SnapshotHeader = export_ast.SnapshotHeader;
@@ -81,7 +82,7 @@ pub fn zrParse(
         parseMode,
     ) catch |err| {
         result.status = switch (err) {
-            error.TooLarge => 1,
+            error.TooLarge, error.InvalidUtf8, error.InvalidOffset => 1,
             error.OutOfMemory => 3,
         };
         return result;
@@ -140,15 +141,17 @@ fn parseInto(
     gpa: Allocator,
     source: [:0]const u8,
     mode: Ast.Mode,
-) (error{ TooLarge, OutOfMemory })![]align(8) u8 {
+) (error{ TooLarge, OutOfMemory, InvalidUtf8, InvalidOffset })![]align(8) u8 {
     const ast = try Ast.parse(gpa, source, .{ .mode = mode });
+    const utf16Positions = try utf_conversion.calculate_utf16_positions(gpa, source, ast.tokens.items(.start));
+    defer gpa.free(utf16Positions);
     const layout = try layoutFor(&ast);
     const output = try gpa.alignedAlloc(u8, .@"8", layout.totalSize);
     const header: SnapshotHeader = .{
         .magic = MAGIC,
-        .abiVersion = 2,
+        .abiVersion = export_ast.ABI_VERSION,
         .mode = @backingInt(mode),
-        .sourceLen = @intCast(source.len),
+        .sourceLen = utf16Positions[utf16Positions.len - 1],
         .tokenCount = @intCast(ast.tokens.len),
         .nodeCount = @intCast(ast.nodes.len),
         .extraDataCount = @intCast(ast.extra_data.len),
@@ -167,8 +170,8 @@ fn parseInto(
     const tokenTags: []const u8 = @as([*]const u8, @ptrCast(ast.tokens.items(.tag).ptr))[0..ast.tokens.len];
     @memcpy(output[layout.tokenTags..][0..tokenTags.len], tokenTags);
     @memset(output[layout.tokenTags + tokenTags.len .. layout.tokenStarts], 0);
-    const tokenStarts = std.mem.sliceAsBytes(ast.tokens.items(.start));
-    @memcpy(output[layout.tokenStarts..][0..tokenStarts.len], tokenStarts);
+    const positionBytes = std.mem.sliceAsBytes(utf16Positions);
+    @memcpy(output[layout.tokenStarts..][0..positionBytes.len], positionBytes);
 
     const nodeTags: []const u8 = @as([*]const u8, @ptrCast(ast.nodes.items(.tag).ptr))[0..ast.nodes.len];
     @memcpy(output[layout.nodeTags..][0..nodeTags.len], nodeTags);
@@ -433,7 +436,7 @@ fn testSnapshot(state: *ScopedState, source: [:0]const u8, mode: Mode, minimumNo
     const header: *const SnapshotHeader = @ptrCast(@alignCast(output.ptr));
 
     try std.testing.expectEqual(@as(u32, MAGIC), header.magic);
-    try std.testing.expectEqual(@as(u32, 2), header.abiVersion);
+    try std.testing.expectEqual(export_ast.ABI_VERSION, header.abiVersion);
     try std.testing.expectEqual(@as(u32, @backingInt(mode)), header.mode);
     try std.testing.expectEqual(@as(u32, @intCast(output.len)), header.totalSize);
     try std.testing.expect(header.nodeCount >= minimumNodes);
@@ -450,6 +453,60 @@ test "parse into a state-owned snapshot and retain capacity after free" {
     try testSnapshot(&state, ".{ .answer = 42 }", .zon, 2);
     try testSnapshot(&state, "const = ;", .zig, 1);
     try testSnapshot(&state, "", .zig, 1);
+}
+
+fn testTokenPositions(state: *ScopedState, source: [:0]const u8, mode: Mode, expected: []const u32) !void {
+    defer zrFree(state);
+    const input = zrAllocInput(state, source.len) orelse return error.OutOfMemory;
+    @memcpy(input[0..source.len], source);
+    const result = zrParse(state, input, source.len, mode);
+    try std.testing.expectEqual(@as(u32, 0), result.status);
+
+    const output = result.data.?[0..result.size];
+    const header: *const SnapshotHeader = @ptrCast(@alignCast(output.ptr));
+    try std.testing.expectEqual(export_ast.ABI_VERSION, header.abiVersion);
+    try std.testing.expectEqual(@as(u32, @intCast(expected.len)), header.tokenCount);
+    try std.testing.expectEqual(expected[expected.len - 1], header.sourceLen);
+    const starts: [*]const u32 = @ptrCast(@alignCast(output.ptr + header.tokenStartsOffset));
+    try std.testing.expectEqualSlices(u32, expected, starts[0..header.tokenCount]);
+    const eofTag = output[header.tokenTagsOffset + header.tokenCount - 1];
+    try std.testing.expectEqual(@as(u8, @backingInt(@import("ziglang/tokenizer.zig").Token.Tag.eof)), eofTag);
+}
+
+test "snapshot exports UTF-16 token starts and source length" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+
+    try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 6, 8, 10, 16, 17 });
+    try testTokenPositions(&state, "const x = \"π€😀\"; \n// π€😀\n", .zig, &.{ 0, 6, 8, 10, 16, 27 });
+    try testTokenPositions(&state, ".{ .text = \"π€😀\" }", .zon, &.{ 0, 1, 3, 4, 9, 11, 18, 19 });
+}
+
+test "snapshot source length includes whitespace and comments without tokens" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+
+    try testTokenPositions(&state, "", .zig, &.{0});
+    try testTokenPositions(&state, " \r\n\t", .zig, &.{4});
+    try testTokenPositions(&state, "// π€😀\n", .zig, &.{8});
+}
+
+test "malformed UTF-8 returns no snapshot and the session remains reusable" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+    const sources = [_][:0]const u8{ "const x = \"\xc0\x80\";", "//\x80" };
+
+    for (sources) |source| {
+        const input = zrAllocInput(&state, source.len) orelse return error.OutOfMemory;
+        @memcpy(input[0..source.len], source);
+        const result = zrParse(&state, input, source.len, .zig);
+        try std.testing.expectEqual(@as(u32, 1), result.status);
+        try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
+        try std.testing.expectEqual(@as(usize, 0), result.size);
+        zrFree(&state);
+
+        try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 6, 8, 10, 16, 17 });
+    }
 }
 
 test "failed parse clears the result and state can be reused after free" {

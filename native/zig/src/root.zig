@@ -4,6 +4,7 @@ const tokenizer = @import("ziglang/tokenizer.zig");
 const handles = @import("handles.zig");
 const export_ast = @import("export_ast.zig");
 const shared = @import("shared.zig");
+const utf_conversion = @import("utf_conversion.zig");
 const SnapshotHeader = export_ast.SnapshotHeader;
 const NodePayload = export_ast.NodePayload;
 const ErrorView = export_ast.ErrorView;
@@ -40,6 +41,7 @@ pub export fn zrAllocInput(state: *ScopedState, sourceLen: usize) ?[*:0]u8 {
     return handles.zrAllocInput(state, sourceLen);
 }
 
+/// Parses UTF-8 bytes into a snapshot with UTF-16 token starts and source length.
 pub export fn zrParse(
     state: *ScopedState,
     sourcePtr: ?[*]const u8,
@@ -47,4 +49,9 @@ pub export fn zrParse(
     mode: Mode,
 ) *const ParseResult {
     return handles.zrParse(state, sourcePtr, sourceLen, mode);
+}
+
+test {
+    _ = handles;
+    _ = utf_conversion;
 }

@@ -1,11 +1,68 @@
 package com.zigrawr.zig.native
 
 import com.zigrawr.lang.bin.MutBytes
+import java.lang.foreign.MemoryLayout.PathElement.groupElement
+import java.lang.foreign.ValueLayout
 
 /**
  * *handshake* sanity check value to check correctness against native binary.
  */
 const val AST_MAGIC = 0x5A524153
+
+private const val AST_ABI_VERSION = 1
+
+private val snapshotHeaderSize = Layout.Data.zrSnapshotHeader.byteSize().toInt()
+private val headerMagicOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("magic")).toInt()
+private val headerAbiVersionOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("abiVersion")).toInt()
+private val headerModeOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("mode")).toInt()
+private val headerSourceLengthOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("sourceLen")).toInt()
+private val headerTokenCountOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("tokenCount")).toInt()
+private val headerNodeCountOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodeCount")).toInt()
+private val headerExtraDataCountOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("extraDataCount")).toInt()
+private val headerErrorCountOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("errorCount")).toInt()
+private val headerExtraDataOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("extraDataOffset")).toInt()
+private val headerErrorsOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("errorsOffset")).toInt()
+private val headerTotalSizeOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("totalSize")).toInt()
+
+@PublishedApi
+internal val headerTokenTagsOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("tokenTagsOffset")).toInt()
+
+@PublishedApi
+internal val headerTokenStartsOffset =
+    Layout.Data.zrSnapshotHeader.byteOffset(groupElement("tokenStartsOffset")).toInt()
+
+@PublishedApi
+internal val headerNodeTagsOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodeTagsOffset")).toInt()
+
+@PublishedApi
+internal val headerNodeMainTokensOffset =
+    Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodeMainTokensOffset")).toInt()
+
+@PublishedApi
+internal val headerNodePayloadsOffset =
+    Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodePayloadsOffset")).toInt()
+
+@PublishedApi
+internal val tagSize = ValueLayout.JAVA_BYTE.byteSize().toInt()
+
+@PublishedApi
+internal val wordSize = ValueLayout.JAVA_INT.byteSize().toInt()
+
+@PublishedApi
+internal val nodePayloadSize = Layout.Data.zrNodePayload.byteSize().toInt()
+
+@PublishedApi
+internal val nodePayloadFirstOffset = Layout.Data.zrNodePayload.byteOffset(groupElement("first")).toInt()
+
+@PublishedApi
+internal val nodePayloadSecondOffset = Layout.Data.zrNodePayload.byteOffset(groupElement("second")).toInt()
+
+private val errorViewSize = Layout.Data.zrErrorView.byteSize().toInt()
+private val errorTagOffset = Layout.Data.zrErrorView.byteOffset(groupElement("tag")).toInt()
+private val errorTokenOffset = Layout.Data.zrErrorView.byteOffset(groupElement("token")).toInt()
+private val errorFlagsOffset = Layout.Data.zrErrorView.byteOffset(groupElement("flags")).toInt()
+private val errorExtraKindOffset = Layout.Data.zrErrorView.byteOffset(groupElement("extraKind")).toInt()
+private val errorExtraValueOffset = Layout.Data.zrErrorView.byteOffset(groupElement("extraValue")).toInt()
 
 @JvmInline
 value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
@@ -367,19 +424,19 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
     enum class ErrorExtraKind { None, ExpectedToken, InvalidByte }
 
     init {
-        require(bytes.size >= 64)
-        require(bytes.getPackedInt(0) == AST_MAGIC)
-        require(bytes.getPackedInt(4) == 2)
-        require(bytes.getPackedInt(8) in 0..1)
-        require(bytes.getPackedInt(12) >= 0)
-        require(bytes.getPackedInt(60) == bytes.size)
-        checkSection(32, 16, 1)
-        checkSection(36, 16, 4)
-        checkSection(40, 20, 1)
-        checkSection(44, 20, 4)
-        checkSection(48, 20, 8)
-        checkSection(52, 24, 4)
-        checkSection(56, 28, 24)
+        require(bytes.size >= snapshotHeaderSize)
+        require(word(headerMagicOffset) == AST_MAGIC)
+        require(word(headerAbiVersionOffset) == AST_ABI_VERSION)
+        require(word(headerModeOffset) in Mode.entries.indices)
+        require(word(headerSourceLengthOffset) >= 0)
+        require(word(headerTotalSizeOffset) == bytes.size)
+        checkSection(headerTokenTagsOffset, headerTokenCountOffset, tagSize)
+        checkSection(headerTokenStartsOffset, headerTokenCountOffset, wordSize)
+        checkSection(headerNodeTagsOffset, headerNodeCountOffset, tagSize)
+        checkSection(headerNodeMainTokensOffset, headerNodeCountOffset, wordSize)
+        checkSection(headerNodePayloadsOffset, headerNodeCountOffset, nodePayloadSize)
+        checkSection(headerExtraDataOffset, headerExtraDataCountOffset, wordSize)
+        checkSection(headerErrorsOffset, headerErrorCountOffset, errorViewSize)
     }
 
     /**
@@ -390,72 +447,117 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
     inline fun forEachNode(block: (nodeIndex: Int, nodeTag: NodeTag, tokenIndex: Int, payloadWord0: Int, payloadWord1: Int) -> Unit) {
         var index = 0
         val count = nodeCount()
-        val tagsOffset = bytes.getPackedInt(40)
-        val mainTokensOffset = bytes.getPackedInt(44)
-        val payloadsOffset = bytes.getPackedInt(48)
+        val tagsOffset = bytes.getPackedInt(headerNodeTagsOffset)
+        val mainTokensOffset = bytes.getPackedInt(headerNodeMainTokensOffset)
+        val payloadsOffset = bytes.getPackedInt(headerNodePayloadsOffset)
         while (index < count) {
-            val tag = NodeTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
-            val mainToken = bytes.getPackedInt(mainTokensOffset + index * 4)
-            val payloadOffset = payloadsOffset + index * 8
-            val payloadWord0 = bytes.getPackedInt(payloadOffset)
-            val payloadWord1 = bytes.getPackedInt(payloadOffset + 4)
+            val tag = NodeTag.entries[bytes[tagsOffset + index * tagSize].toInt() and 0xFF]
+            val mainToken = bytes.getPackedInt(mainTokensOffset + index * wordSize)
+            val payloadOffset = payloadsOffset + index * nodePayloadSize
+            val payloadWord0 = bytes.getPackedInt(payloadOffset + nodePayloadFirstOffset)
+            val payloadWord1 = bytes.getPackedInt(payloadOffset + nodePayloadSecondOffset)
             block(index, tag, mainToken, payloadWord0, payloadWord1)
             index++
         }
     }
 
     /**
-     * `tokenIndex` is the token index, `tokenTag` its kind, and `startByte` its UTF-8 byte offset.
+     * `tokenIndex` is the token index, `tokenTag` its kind, and `startOffset` its UTF-16 code unit offset.
      * Inlined so that caller stays on stack.
      */
-    inline fun forEachToken(block: (tokenIndex: Int, tokenTag: TokenTag, startByte: Int) -> Unit) {
+    inline fun forEachToken(block: (tokenIndex: Int, tokenTag: TokenTag, startOffset: Int) -> Unit) {
         var index = 0
         val count = tokenCount()
-        val tagsOffset = bytes.getPackedInt(32)
-        val startsOffset = bytes.getPackedInt(36)
+        val tagsOffset = bytes.getPackedInt(headerTokenTagsOffset)
+        val startsOffset = bytes.getPackedInt(headerTokenStartsOffset)
         while (index < count) {
-            val tag = TokenTag.entries[bytes[tagsOffset + index].toInt() and 0xFF]
-            val start = bytes.getPackedInt(startsOffset + index * 4)
+            val tag = TokenTag.entries[bytes[tagsOffset + index * tagSize].toInt() and 0xFF]
+            val start = bytes.getPackedInt(startsOffset + index * wordSize)
             block(index, tag, start)
             index++
         }
     }
 
-    fun mode(): Mode = Mode.entries[word(8)]
+    fun mode(): Mode = Mode.entries[word(headerModeOffset)]
 
-    fun sourceLength(): Int = word(12)
+    /** Source length in UTF-16 code units. */
+    fun sourceLength(): Int = word(headerSourceLengthOffset)
 
-    fun tokenCount(): Int = word(16)
+    fun tokenCount(): Int = word(headerTokenCountOffset)
 
-    fun nodeCount(): Int = word(20)
+    fun nodeCount(): Int = word(headerNodeCountOffset)
 
-    fun extraDataCount(): Int = word(24)
+    fun extraDataCount(): Int = word(headerExtraDataCountOffset)
 
-    fun errorCount(): Int = word(28)
+    fun errorCount(): Int = word(headerErrorCountOffset)
 
-    fun tokenTag(index: Int): TokenTag = TokenTag.entries[bytes[entryOffset(index, 16, 32, 1)].toInt() and 0xFF]
+    fun tokenTag(index: Int): TokenTag {
+        val entries = TokenTag.entries
+        return entries[bytes[entryOffset(
+            index,
+            headerTokenCountOffset,
+            headerTokenTagsOffset,
+            tagSize
+        )].toInt() and 0xFF]
+    }
 
-    fun tokenStart(index: Int): Int = word(entryOffset(index, 16, 36, 4))
+    /** Token start relative to the parsed source, in UTF-16 code units. */
+    fun tokenStart(index: Int): Int =
+        word(entryOffset(index, headerTokenCountOffset, headerTokenStartsOffset, wordSize))
 
-    fun nodeTag(index: Int): NodeTag = NodeTag.entries[bytes[entryOffset(index, 20, 40, 1)].toInt() and 0xFF]
+    fun nodeTag(index: Int): NodeTag =
+        NodeTag.entries[bytes[entryOffset(
+            index,
+            headerNodeCountOffset,
+            headerNodeTagsOffset,
+            tagSize
+        )].toInt() and 0xFF]
 
-    fun nodeMainToken(index: Int): Int = word(entryOffset(index, 20, 44, 4))
+    fun nodeMainToken(index: Int): Int =
+        word(entryOffset(index, headerNodeCountOffset, headerNodeMainTokensOffset, wordSize))
 
-    fun extraData(index: Int): Int = word(entryOffset(index, 24, 52, 4))
+    fun extraData(index: Int): Int =
+        word(entryOffset(index, headerExtraDataCountOffset, headerExtraDataOffset, wordSize))
 
-    fun errorTag(index: Int): ErrorTag = ErrorTag.entries[word(entryOffset(index, 28, 56, 24))]
+    fun errorTag(index: Int): ErrorTag =
+        ErrorTag.entries[word(
+            entryOffset(
+                index,
+                headerErrorCountOffset,
+                headerErrorsOffset,
+                errorViewSize
+            ) + errorTagOffset
+        )]
 
-    fun errorToken(index: Int): Int = word(entryOffset(index, 28, 56, 24) + 4)
+    fun errorToken(index: Int): Int =
+        word(entryOffset(index, headerErrorCountOffset, headerErrorsOffset, errorViewSize) + errorTokenOffset)
 
-    fun errorFlags(index: Int): Int = word(entryOffset(index, 28, 56, 24) + 8)
+    fun errorFlags(index: Int): Int =
+        word(entryOffset(index, headerErrorCountOffset, headerErrorsOffset, errorViewSize) + errorFlagsOffset)
 
     fun errorIsNote(index: Int): Boolean = errorFlags(index) and 1 != 0
 
     fun errorTokenIsPrevious(index: Int): Boolean = errorFlags(index) and 2 != 0
 
-    fun errorExtraKind(index: Int): ErrorExtraKind = ErrorExtraKind.entries[word(entryOffset(index, 28, 56, 24) + 12)]
+    fun errorExtraKind(index: Int): ErrorExtraKind =
+        ErrorExtraKind.entries[word(
+            entryOffset(
+                index,
+                headerErrorCountOffset,
+                headerErrorsOffset,
+                errorViewSize
+            ) + errorExtraKindOffset
+        )]
 
-    fun errorExtraValue(index: Int): Long = bytes.getPackedLong(entryOffset(index, 28, 56, 24) + 16)
+    fun errorExtraValue(index: Int): Long =
+        bytes.getPackedLong(
+            entryOffset(
+                index,
+                headerErrorCountOffset,
+                headerErrorsOffset,
+                errorViewSize
+            ) + errorExtraValueOffset
+        )
 
     private fun word(offset: Int): Int = bytes.getPackedInt(offset)
 
@@ -468,6 +570,6 @@ value class NativeAst(@PublishedApi internal val bytes: MutBytes) {
     private fun checkSection(offsetField: Int, countField: Int, stride: Int) {
         val offset = word(offsetField)
         val count = word(countField)
-        require(offset >= 64 && count >= 0 && offset.toLong() + count.toLong() * stride <= bytes.size)
+        require(offset >= snapshotHeaderSize && count >= 0 && offset.toLong() + count.toLong() * stride <= bytes.size)
     }
 }

@@ -3700,7 +3700,6 @@ const OptionalTokenIndex = Ast.OptionalTokenIndex;
 const ExtraIndex = Ast.ExtraIndex;
 const Token = @import("tokenizer.zig").Token;
 
-
 test "unreserving a freshly reserved AST node must not create zombies" {
     const gpa = std.testing.allocator;
     var parser: Parse = .{

@@ -12,7 +12,6 @@ pub const Mode = enum(u32) {
     _,
 };
 
-
 // State of single scope, returned by `zrStartSession`.
 // Not threadsafe, consumers should guarantee synchronization.
 // Valid until `zrCloseSession` call.

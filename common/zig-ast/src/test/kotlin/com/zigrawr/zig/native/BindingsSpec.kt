@@ -6,7 +6,9 @@ import com.zigrawr.lang.log.Log
 import com.zigrawr.zig.ast.ParseMode
 import com.zigrawr.zig.tokenizer.BaseSpec
 import com.zigrawr.zig.tokenizer.useTempDir
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import java.lang.foreign.MemoryLayout.PathElement.groupElement
 import java.lang.foreign.MemorySegment
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
@@ -29,25 +31,28 @@ class BindingsSpec : BaseSpec({
 
     should("encode source text as UTF-8") {
         useBindings { bindings ->
-            val parse = bindings.parseChars("const x = \"π\";", ParseMode.Zig)
-            parse[12].toInt() shouldBe 15
+            val source = "const x = \"π\";"
+            val ast = NativeAst(bindings.parseChars(source, ParseMode.Zig))
+            ast.sourceLength() shouldBe source.length
         }
     }
 
     should("parse source bytes") {
         useBindings { bindings ->
-            val parse = bindings.parseBytes("const x = \"π\";".toByteArray().asReadonly(), ParseMode.Zig)
-            parse[12].toInt() shouldBe 15
+            val source = "const x = \"π\";"
+            val ast = NativeAst(bindings.parseBytes(source.toByteArray().asReadonly(), ParseMode.Zig))
+            ast.sourceLength() shouldBe source.length
         }
     }
 
     should("parse a source file") {
         useTempDir { dir ->
             val path = Files.createFile(dir.resolve("zigrawr.zig"))
-            Files.writeString(path, "const x = \"π\";")
+            val source = "const x = \"π\";"
+            Files.writeString(path, source)
             useBindings { bindings ->
-                val parse = bindings.parseAtPath(path)
-                parse[12].toInt() shouldBe 15
+                val ast = NativeAst(bindings.parseAtPath(path))
+                ast.sourceLength() shouldBe source.length
             }
         }
     }
@@ -56,7 +61,7 @@ class BindingsSpec : BaseSpec({
         useBindings { bindings ->
             val ast = NativeAst(bindings.parseChars("const x = \"π\";", ParseMode.Zig))
             ast.mode() shouldBe NativeAst.Mode.Zig
-            ast.sourceLength() shouldBe 15
+            ast.sourceLength() shouldBe 14
             ast.tokenStart(0) shouldBe 0
             ast.nodeTag(0) shouldBe NativeAst.NodeTag.ROOT
             ast.nodeMainToken(0) shouldBe 0
@@ -75,6 +80,44 @@ class BindingsSpec : BaseSpec({
             ast.errorIsNote(0) shouldBe (ast.errorFlags(0) and 1 != 0)
             ast.errorTokenIsPrevious(0) shouldBe (ast.errorFlags(0) and 2 != 0)
             (ast.errorExtraValue(0) >= 0) shouldBe true
+        }
+    }
+
+    should("expose UTF-16 token starts and source length including trailing comments") {
+        useBindings { bindings ->
+            val source = "const x = \"π€😀\"; \n// π€😀\n"
+            val ast = NativeAst(bindings.parseChars(source, ParseMode.Zig))
+            val expectedStarts = listOf(0, 6, 8, 10, source.indexOf(';'), source.length)
+
+            ast.sourceLength() shouldBe source.length
+            ast.tokenCount() shouldBe expectedStarts.size
+            List(ast.tokenCount(), ast::tokenStart) shouldBe expectedStarts
+            ast.tokenTag(ast.tokenCount() - 1) shouldBe NativeAst.TokenTag.EOF
+
+            val iteratedStarts = mutableListOf<Int>()
+            ast.forEachToken { _, _, startOffset -> iteratedStarts.add(startOffset) }
+            iteratedStarts shouldBe expectedStarts
+        }
+    }
+
+    should("expose UTF-16 offsets for ZON snapshots") {
+        useBindings { bindings ->
+            val source = ".{ .text = \"π€😀\" }"
+            val ast = NativeAst(bindings.parseChars(source, ParseMode.Zon))
+
+            ast.mode() shouldBe NativeAst.Mode.Zon
+            ast.sourceLength() shouldBe source.length
+            List(ast.tokenCount(), ast::tokenStart) shouldBe listOf(0, 1, 3, 4, 9, 11, source.indexOf('}'), source.length)
+        }
+    }
+
+    should("reject snapshots with an unsupported ABI version") {
+        useBindings { bindings ->
+            val snapshot = bindings.parseChars("const x = 1;", ParseMode.Zig)
+            val abiVersionOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("abiVersion")).toInt()
+            snapshot.setPackedInt(abiVersionOffset, 2)
+
+            shouldThrow<IllegalArgumentException> { NativeAst(snapshot) }
         }
     }
 
@@ -122,7 +165,6 @@ class BindingsSpec : BaseSpec({
 
             val grown = countedBindings.parseChars(large, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 2
-            grown.size shouldBe grown.getPackedInt(60)
             NativeAst(grown).sourceLength() shouldBe large.length
 
             countedBindings.parseChars(large, ParseMode.Zig)
@@ -130,7 +172,6 @@ class BindingsSpec : BaseSpec({
 
             val shrunk = countedBindings.parseChars(small, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 4
-            shrunk.size shouldBe shrunk.getPackedInt(60)
             NativeAst(shrunk).sourceLength() shouldBe small.length
         } finally {
             countedBindings.close()
@@ -149,7 +190,7 @@ class BindingsSpec : BaseSpec({
         } finally {
             bindings.close()
         }
-        NativeAst(snapshot).sourceLength() shouldBe 15
+        NativeAst(snapshot).sourceLength() shouldBe 14
         NativeAst(snapshot).errorCount() shouldBe 0
     }
 
