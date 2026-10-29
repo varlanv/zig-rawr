@@ -5,6 +5,7 @@ import com.intellij.psi.tree.IElementType
 import com.zigrawr.jbplugin.IdeProcessState
 
 class ZigLexer(state: IdeProcessState) : LexerBase() {
+
     override fun start(buffer: CharSequence, startOffset: Int, endOffset: Int, initialState: Int) {
         TODO("Not yet implemented")
     }
