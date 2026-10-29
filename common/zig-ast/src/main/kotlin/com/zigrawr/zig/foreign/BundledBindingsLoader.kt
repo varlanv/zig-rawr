@@ -1,7 +1,9 @@
 package com.zigrawr.zig.foreign
 
 import com.zigrawr.lang.log.Log
+import java.nio.file.Files
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.util.*
 
 object BundledBindingsLoader {
@@ -54,7 +56,16 @@ object BundledBindingsLoader {
             TODO("Handle missing binary gracefully")
         }
         return try {
-            Loader.loadFromPath(Paths.get(binaryUrl.toURI()))
+            val binaryPath = if (binaryUrl.protocol == "file") {
+                Paths.get(binaryUrl.toURI())
+            } else {
+                // need to extract the file in case it's inside the JAR so that OS can load it
+                val extracted = Files.createTempFile("zig-rawr", null)
+                extracted.toFile().deleteOnExit()
+                binaryUrl.openStream().use { Files.copy(it, extracted, REPLACE_EXISTING) }
+                extracted
+            }
+            Loader.loadFromPath(binaryPath)
         } catch (e: Exception) {
             log.debug { "Failed to load binary - [ ${e.message} ]" }
             throw e

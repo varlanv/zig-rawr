@@ -6,6 +6,12 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <lang.parserDefinition
+            language="Zig"
+            implementationClass="com.zigrawr.jbplugin.lexer.ZigParserDefinition"/>
+        <lang.syntaxHighlighterFactory
+            language="Zig"
+            implementationClass="com.zigrawr.jbplugin.highlight.ZigSyntaxHighlighterFactory"/>
         <fileType
             name="Zig"
             language="Zig"
