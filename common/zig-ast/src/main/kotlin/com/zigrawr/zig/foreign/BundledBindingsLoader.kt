@@ -1,8 +1,8 @@
-package com.zigrawr.zig.native
+package com.zigrawr.zig.foreign
 
 import com.zigrawr.lang.log.Log
 import java.nio.file.Paths
-import java.util.Properties
+import java.util.*
 
 object BundledBindingsLoader {
 

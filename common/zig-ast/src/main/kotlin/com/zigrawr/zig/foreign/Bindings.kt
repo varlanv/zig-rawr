@@ -1,4 +1,4 @@
-package com.zigrawr.zig.native
+package com.zigrawr.zig.foreign
 
 import com.zigrawr.lang.bin.Bytes
 import com.zigrawr.lang.bin.MutBytes

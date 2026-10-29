@@ -4,8 +4,8 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.zigrawr.jbplugin.log.IntellijLog
-import com.zigrawr.zig.native.Bindings
-import com.zigrawr.zig.native.BundledBindingsLoader
+import com.zigrawr.zig.foreign.Bindings
+import com.zigrawr.zig.foreign.BundledBindingsLoader
 
 private val log = IntellijLog.asInternalLog()
 

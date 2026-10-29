@@ -6,18 +6,18 @@ const Allocator = std.mem.Allocator;
 pub fn calculate_utf16_positions(
     gpa: Allocator,
     source: []const u8,
-    tokenStarts: []const u32,
+    byteOffsets: []const u32,
 ) error{ OutOfMemory, InvalidUtf8, InvalidOffset }![]const u32 {
-    const sourceEnd: usize = if (tokenStarts.len == 0) 0 else tokenStarts[tokenStarts.len - 1];
+    const sourceEnd: usize = if (byteOffsets.len == 0) 0 else byteOffsets[byteOffsets.len - 1];
     if (sourceEnd > source.len) return error.InvalidOffset;
-    const output = try gpa.alloc(u32, tokenStarts.len);
+    const output = try gpa.alloc(u32, byteOffsets.len);
     errdefer gpa.free(output);
     var bytePosition: usize = 0;
     var utf16Position: u32 = 0;
     var asciiEnd = ascii_prefix_length(source[0..sourceEnd]);
     if (asciiEnd == sourceEnd) {
         var previous: u32 = 0;
-        for (tokenStarts, 0..) |offset, idx| {
+        for (byteOffsets, 0..) |offset, idx| {
             if (offset < previous or offset > sourceEnd) return error.InvalidOffset;
             output[idx] = offset;
             previous = offset;
@@ -25,7 +25,7 @@ pub fn calculate_utf16_positions(
         return output;
     }
 
-    for (tokenStarts, 0..) |offset, idx| {
+    for (byteOffsets, 0..) |offset, idx| {
         if (offset < bytePosition or offset > sourceEnd) return error.InvalidOffset;
         while (bytePosition < offset) {
             if (source[bytePosition] < 0x80) {

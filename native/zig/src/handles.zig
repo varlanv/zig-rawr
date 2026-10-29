@@ -8,6 +8,7 @@ const ParseResult = export_ast.ParseResult;
 const SnapshotHeader = export_ast.SnapshotHeader;
 const ScopedState = shared.ScopedState;
 const NodePayload = export_ast.NodePayload;
+const TokenPositions = export_ast.TokenPositions;
 const ErrorView = export_ast.ErrorView;
 const Mode = shared.Mode;
 const Layout = export_ast.Layout;
@@ -119,7 +120,7 @@ fn layoutFor(ast: *const Ast) error{TooLarge}!Layout {
 
     var cursor: usize = @sizeOf(SnapshotHeader);
     const tokenTags = try reserve(&cursor, 1, ast.tokens.len, 1);
-    const tokenStarts = try reserve(&cursor, 4, ast.tokens.len, 4);
+    const tokenPositions = try reserve(&cursor, @alignOf(TokenPositions), ast.tokens.len, @sizeOf(TokenPositions));
     const nodeTags = try reserve(&cursor, 1, ast.nodes.len, 1);
     const nodeMainTokens = try reserve(&cursor, 4, ast.nodes.len, 4);
     const nodePayloads = try reserve(&cursor, 4, ast.nodes.len, @sizeOf(NodePayload));
@@ -127,7 +128,7 @@ fn layoutFor(ast: *const Ast) error{TooLarge}!Layout {
     const errors = try reserve(&cursor, 8, ast.errors.len, @sizeOf(ErrorView));
     return .{
         .tokenTags = tokenTags,
-        .tokenStarts = tokenStarts,
+        .tokenPositions = tokenPositions,
         .nodeTags = nodeTags,
         .nodeMainTokens = nodeMainTokens,
         .nodePayloads = nodePayloads,
@@ -143,9 +144,18 @@ fn parseInto(
     mode: Ast.Mode,
 ) (error{ TooLarge, OutOfMemory, InvalidUtf8, InvalidOffset })![]align(8) u8 {
     const ast = try Ast.parse(gpa, source, .{ .mode = mode });
-    const utf16Positions = try utf_conversion.calculate_utf16_positions(gpa, source, ast.tokens.items(.start));
-    defer gpa.free(utf16Positions);
     const layout = try layoutFor(&ast);
+    const bytePositions = try gpa.alloc(TokenPositions, ast.tokens.len);
+    defer gpa.free(bytePositions);
+    for (ast.tokens.items(.start), 0..) |start, index| {
+        bytePositions[index] = .{
+            .start = start,
+            .end = @intCast(@as(usize, start) + ast.tokenSlice(@intCast(index)).len),
+        };
+    }
+    const byteOffsets = std.mem.bytesAsSlice(u32, std.mem.sliceAsBytes(bytePositions));
+    const utf16Positions = try utf_conversion.calculate_utf16_positions(gpa, source, byteOffsets);
+    defer gpa.free(utf16Positions);
     const output = try gpa.alignedAlloc(u8, .@"8", layout.totalSize);
     const header: SnapshotHeader = .{
         .magic = MAGIC,
@@ -157,7 +167,7 @@ fn parseInto(
         .extraDataCount = @intCast(ast.extra_data.len),
         .errorCount = @intCast(ast.errors.len),
         .tokenTagsOffset = layout.tokenTags,
-        .tokenStartsOffset = layout.tokenStarts,
+        .tokenPositionsOffset = layout.tokenPositions,
         .nodeTagsOffset = layout.nodeTags,
         .nodeMainTokensOffset = layout.nodeMainTokens,
         .nodePayloadsOffset = layout.nodePayloads,
@@ -169,9 +179,9 @@ fn parseInto(
 
     const tokenTags: []const u8 = @as([*]const u8, @ptrCast(ast.tokens.items(.tag).ptr))[0..ast.tokens.len];
     @memcpy(output[layout.tokenTags..][0..tokenTags.len], tokenTags);
-    @memset(output[layout.tokenTags + tokenTags.len .. layout.tokenStarts], 0);
+    @memset(output[layout.tokenTags + tokenTags.len .. layout.tokenPositions], 0);
     const positionBytes = std.mem.sliceAsBytes(utf16Positions);
-    @memcpy(output[layout.tokenStarts..][0..positionBytes.len], positionBytes);
+    @memcpy(output[layout.tokenPositions..][0..positionBytes.len], positionBytes);
 
     const nodeTags: []const u8 = @as([*]const u8, @ptrCast(ast.nodes.items(.tag).ptr))[0..ast.nodes.len];
     @memcpy(output[layout.nodeTags..][0..nodeTags.len], nodeTags);
@@ -465,30 +475,39 @@ fn testTokenPositions(state: *ScopedState, source: [:0]const u8, mode: Mode, exp
     const output = result.data.?[0..result.size];
     const header: *const SnapshotHeader = @ptrCast(@alignCast(output.ptr));
     try std.testing.expectEqual(export_ast.ABI_VERSION, header.abiVersion);
-    try std.testing.expectEqual(@as(u32, @intCast(expected.len)), header.tokenCount);
+    const offsetsPerToken = @sizeOf(TokenPositions) / @sizeOf(u32);
+    try std.testing.expectEqual(@as(u32, @intCast(expected.len / offsetsPerToken)), header.tokenCount);
     try std.testing.expectEqual(expected[expected.len - 1], header.sourceLen);
-    const starts: [*]const u32 = @ptrCast(@alignCast(output.ptr + header.tokenStartsOffset));
-    try std.testing.expectEqualSlices(u32, expected, starts[0..header.tokenCount]);
+    const positions: [*]const u32 = @ptrCast(@alignCast(output.ptr + header.tokenPositionsOffset));
+    try std.testing.expectEqualSlices(u32, expected, positions[0 .. header.tokenCount * offsetsPerToken]);
     const eofTag = output[header.tokenTagsOffset + header.tokenCount - 1];
     try std.testing.expectEqual(@as(u8, @backingInt(@import("ziglang/tokenizer.zig").Token.Tag.eof)), eofTag);
 }
 
-test "snapshot exports UTF-16 token starts and source length" {
+test "snapshot exports interleaved UTF-16 token ranges and source length" {
     var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
     defer state.arena.deinit();
 
-    try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 6, 8, 10, 16, 17 });
-    try testTokenPositions(&state, "const x = \"π€😀\"; \n// π€😀\n", .zig, &.{ 0, 6, 8, 10, 16, 27 });
-    try testTokenPositions(&state, ".{ .text = \"π€😀\" }", .zon, &.{ 0, 1, 3, 4, 9, 11, 18, 19 });
+    try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 5, 6, 7, 8, 9, 10, 16, 16, 17, 17, 17 });
+    try testTokenPositions(&state, "const x = \"π€😀\"; \n// π€😀\n", .zig, &.{ 0, 5, 6, 7, 8, 9, 10, 16, 16, 17, 27, 27 });
+    try testTokenPositions(&state, ".{ .text = \"π€😀\" }", .zon, &.{ 0, 1, 1, 2, 3, 4, 4, 8, 9, 10, 11, 17, 18, 19, 19, 19 });
 }
 
 test "snapshot source length includes whitespace and comments without tokens" {
     var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
     defer state.arena.deinit();
 
-    try testTokenPositions(&state, "", .zig, &.{0});
-    try testTokenPositions(&state, " \r\n\t", .zig, &.{4});
-    try testTokenPositions(&state, "// π€😀\n", .zig, &.{8});
+    try testTokenPositions(&state, "", .zig, &.{ 0, 0 });
+    try testTokenPositions(&state, " \r\n\t", .zig, &.{ 4, 4 });
+    try testTokenPositions(&state, "// π€😀\n", .zig, &.{ 8, 8 });
+}
+
+test "token ranges exclude gaps and preserve unterminated string boundaries" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+
+    try testTokenPositions(&state, "  const x = 1; // π😀\n", .zig, &.{ 2, 7, 8, 9, 10, 11, 12, 13, 13, 14, 22, 22 });
+    try testTokenPositions(&state, "const x = \"π😀", .zig, &.{ 0, 5, 6, 7, 8, 9, 10, 14, 14, 14 });
 }
 
 test "malformed UTF-8 returns no snapshot and the session remains reusable" {
@@ -505,7 +524,7 @@ test "malformed UTF-8 returns no snapshot and the session remains reusable" {
         try std.testing.expectEqual(@as(usize, 0), result.size);
         zrFree(&state);
 
-        try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 6, 8, 10, 16, 17 });
+        try testTokenPositions(&state, "const x = \"π€😀\";", .zig, &.{ 0, 5, 6, 7, 8, 9, 10, 16, 16, 17, 17, 17 });
     }
 }
 

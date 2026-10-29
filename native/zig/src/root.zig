@@ -7,6 +7,7 @@ const shared = @import("shared.zig");
 const utf_conversion = @import("utf_conversion.zig");
 const SnapshotHeader = export_ast.SnapshotHeader;
 const NodePayload = export_ast.NodePayload;
+const TokenPositions = export_ast.TokenPositions;
 const ErrorView = export_ast.ErrorView;
 const ScopedState = shared.ScopedState;
 const Mode = shared.Mode;
@@ -16,6 +17,9 @@ comptime {
     // sanity check because this assumptions need to hold on Kotlin side as well
     std.debug.assert(@sizeOf(SnapshotHeader) == 64);
     std.debug.assert(@sizeOf(NodePayload) == 8);
+    std.debug.assert(@sizeOf(TokenPositions) == 8);
+    std.debug.assert(@offsetOf(TokenPositions, "start") == 0);
+    std.debug.assert(@offsetOf(TokenPositions, "end") == @sizeOf(u32));
     std.debug.assert(@sizeOf(ErrorView) == 24);
     std.debug.assert(@sizeOf(ParseResult) == 24);
     std.debug.assert(@sizeOf(tokenizer.Token.Tag) == 1);
@@ -41,7 +45,7 @@ pub export fn zrAllocInput(state: *ScopedState, sourceLen: usize) ?[*:0]u8 {
     return handles.zrAllocInput(state, sourceLen);
 }
 
-/// Parses UTF-8 bytes into a snapshot with UTF-16 token starts and source length.
+/// Parses UTF-8 bytes into a snapshot with UTF-16 token ranges and source length.
 pub export fn zrParse(
     state: *ScopedState,
     sourcePtr: ?[*]const u8,

@@ -1,4 +1,4 @@
-package com.zigrawr.zig.native
+package com.zigrawr.zig.foreign
 
 import java.lang.foreign.Arena
 import java.lang.foreign.Linker

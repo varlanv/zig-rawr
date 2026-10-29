@@ -1,4 +1,4 @@
-package com.zigrawr.zig.native
+package com.zigrawr.zig.foreign
 
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.MemoryLayout
@@ -24,13 +24,17 @@ object Layout {
             ValueLayout.JAVA_INT.withName("extraDataCount"),
             ValueLayout.JAVA_INT.withName("errorCount"),
             ValueLayout.JAVA_INT.withName("tokenTagsOffset"),
-            ValueLayout.JAVA_INT.withName("tokenStartsOffset"),
+            ValueLayout.JAVA_INT.withName("tokenPositionsOffset"),
             ValueLayout.JAVA_INT.withName("nodeTagsOffset"),
             ValueLayout.JAVA_INT.withName("nodeMainTokensOffset"),
             ValueLayout.JAVA_INT.withName("nodePayloadsOffset"),
             ValueLayout.JAVA_INT.withName("extraDataOffset"),
             ValueLayout.JAVA_INT.withName("errorsOffset"),
             ValueLayout.JAVA_INT.withName("totalSize"),
+        )
+        val zrTokenPositions: StructLayout = MemoryLayout.structLayout(
+            ValueLayout.JAVA_INT.withName("start"),
+            ValueLayout.JAVA_INT.withName("end"),
         )
         val zrNodePayload: StructLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("first"),

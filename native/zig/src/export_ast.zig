@@ -14,6 +14,12 @@ pub const NodePayload = extern struct {
     second: u32,
 };
 
+/// Inclusive start and exclusive end of a token.
+pub const TokenPositions = extern struct {
+    start: u32,
+    end: u32,
+};
+
 pub const SnapshotHeader = extern struct {
     magic: u32,
     abiVersion: u32,
@@ -25,8 +31,8 @@ pub const SnapshotHeader = extern struct {
     extraDataCount: u32,
     errorCount: u32,
     tokenTagsOffset: u32,
-    /// Byte offset of the u32 array of UTF-16 token starts.
-    tokenStartsOffset: u32,
+    /// Byte offset of the TokenPositions array; entries use UTF-16 code units.
+    tokenPositionsOffset: u32,
     nodeTagsOffset: u32,
     nodeMainTokensOffset: u32,
     nodePayloadsOffset: u32,
@@ -37,7 +43,7 @@ pub const SnapshotHeader = extern struct {
 
 pub const Layout = struct {
     tokenTags: u32,
-    tokenStarts: u32,
+    tokenPositions: u32,
     nodeTags: u32,
     nodeMainTokens: u32,
     nodePayloads: u32,
