@@ -5,7 +5,6 @@
     <description>Zig language support. todotofill40charsrequirement</description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
-    <depends>com.intellij.modules.lsp</depends>
     <extensions defaultExtensionNs="com.intellij">
         <fileType
             name="Zig"
@@ -19,7 +18,5 @@
             extensions="zon"
             implementationClass="com.zigrawr.jbplugin.file.ZonFileType"
             fieldName="INSTANCE"/>
-        <platform.lsp.integrationProvider
-            implementation="com.zigrawr.jbplugin.lsp.ZigLspIntegrationProvider"/>
     </extensions>
 </idea-plugin>

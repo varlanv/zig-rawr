@@ -56,7 +56,6 @@ class InternalConventionPlugin : Plugin<Project> {
                     IntelliJPlatformDependenciesExtension::class.java
                 ) {
                     it.clion(internalCatalog.getVersion("clionVersion"))
-                    it.bundledModule("com.intellij.modules.lsp")
                 }
             }
             project.afterEvaluate {

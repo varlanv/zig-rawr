@@ -47,8 +47,8 @@ object Layout {
 
     object Functions {
 
-        val zrInit: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.ADDRESS)
-        val zrClose: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        val zrStartSession: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.ADDRESS)
+        val zrCloseSession: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
         val zrParse: FunctionDescriptor = FunctionDescriptor.of(
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,

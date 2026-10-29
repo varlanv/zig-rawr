@@ -1,6 +1,6 @@
-const tokenizer = @import("upstream/tokenizer.zig");
-const Parse = @import("upstream/Parse.zig");
-const Ast = @import("upstream/Ast.zig");
+const tokenizer = @import("ziglang/tokenizer.zig");
+const Parse = @import("ziglang/Parse.zig");
+const Ast = @import("ziglang/Ast.zig");
 const std = @import("std");
 
 pub fn main() void {

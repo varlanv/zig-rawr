@@ -204,7 +204,7 @@ private class ParseCallCounter {
             MethodType.methodType(MemorySegment::class.java, MemorySegment::class.java),
         ).bindTo(this)
         return Handles(
-            handles.zrInit, handles.zrClose,
+            handles.zrStartSession, handles.zrCloseSession,
             MethodHandles.filterReturnValue(handles.zrParse, record), handles.zrFree, handles.zrAllocInput,
         )
     }

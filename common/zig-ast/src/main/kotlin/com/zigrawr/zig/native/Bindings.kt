@@ -42,7 +42,7 @@ class Bindings(private val handles: Handles) {
     private val states = ConcurrentLinkedQueue<MemorySegment>()
     private val closed = AtomicBoolean()
     private val threadState = ThreadLocal.withInitial {
-        val state = handles.zrInit() as MemorySegment
+        val state = handles.zrStartSession() as MemorySegment
         check(state != MemorySegment.NULL) { "Failed to initialize native parser" }
         states.add(state)
         state
@@ -146,7 +146,7 @@ class Bindings(private val handles: Handles) {
             while (true) {
                 val state = states.poll() ?: break
                 try {
-                    handles.zrClose.invokeWithArguments(state)
+                    handles.zrCloseSession.invokeWithArguments(state)
                 } catch (_: Exception) {
                     // nothing to do here
                 }
