@@ -6,6 +6,10 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <lineIndentProvider implementation="com.zigrawr.jbplugin.indent.ZigLineIndentProvider"/>
+        <enterBetweenBracesDelegate
+            language="Zig"
+            implementation="com.zigrawr.jbplugin.indent.ZigEnterBetweenBracesDelegate"/>
         <lang.parserDefinition
             language="Zig"
             implementationClass="com.zigrawr.jbplugin.lexer.ZigParserDefinition"/>

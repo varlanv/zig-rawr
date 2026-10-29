@@ -26,6 +26,9 @@ class ZigLexer(state: IdeProcessState) : LexerBase() {
         bufferLimit = endOffset
         nativeTokenIndex = 0
         snapshot = if (startOffset == endOffset) null else {
+            // todo - this is very inefficient; we reparse whole AST just to get tokens. Need to improve zig integration and expose separate tokenizer function; perhaps the one that will support partial reads
+            //        additionally - when run with debugger, I see this function being called on each input character ~4-5 times per input character. For big files that means
+            //        potentially 100k+ chars scan for each input character. Need to investigate whether there it is expected or something causes rescans; perhaps also some sort of debounce is needed ?
             Ast(bindings.parseChars(buffer.subSequence(0, endOffset), ParseMode.Zig))
         }
         classifiedTypes = snapshot?.classifyTokens() ?: emptyArray()
