@@ -12,6 +12,11 @@ class Log(val sink: Sink, val enabled: Boolean) {
         }
     }
 
+    companion object {
+
+        val noop: Log = Log(sink = Sink.noop, enabled = false)
+    }
+
     interface Sink {
 
         fun print(message: String)

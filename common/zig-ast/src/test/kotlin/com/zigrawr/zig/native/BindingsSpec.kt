@@ -2,6 +2,7 @@ package com.zigrawr.zig.native
 
 import com.zigrawr.lang.bin.asList
 import com.zigrawr.lang.bin.asReadonly
+import com.zigrawr.lang.log.Log
 import com.zigrawr.zig.ast.ParseMode
 import com.zigrawr.zig.tokenizer.BaseSpec
 import com.zigrawr.zig.tokenizer.useTempDir
@@ -14,7 +15,7 @@ import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-val handles = BundledBindingsLoader.load()
+val handles = context(Log.noop) { BundledBindingsLoader.load() }
 
 fun useBindings(block: (bindings: Bindings) -> Unit) {
     val bindings = Bindings(handles)
