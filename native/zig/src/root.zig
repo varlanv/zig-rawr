@@ -549,6 +549,7 @@ test "snapshot parses copied parser sources" {
 test "failed parse clears the result and state can be reused after free" {
     var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
     defer state.arena.deinit();
+    _ = zrAllocInput(&state, 1) orelse return error.OutOfMemory;
     state.result = .{ .data = "stale".ptr, .size = 5 };
     const result = zrParse(&state, null, 1, .zig);
 
@@ -576,20 +577,27 @@ test "warm state reuses arena capacity without backing allocations" {
 }
 
 test "out of memory returns no snapshot and permits reuse after free" {
-    var backing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    var backing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     var state: ScopedState = .{ .arena = .init(backing.allocator()) };
     defer state.arena.deinit();
     const source = "const answer = 42;";
-    const result = zrParse(&state, source.ptr, source.len, .zig);
+    const input = zrAllocInput(&state, source.len) orelse return error.OutOfMemory;
+    @memcpy(input[0..source.len], source);
+    backing.fail_index = backing.alloc_index;
+    backing.resize_fail_index = backing.resize_index;
+    const result = zrParse(&state, input, source.len, .zig);
 
+    try std.testing.expect(backing.has_induced_failure);
     try std.testing.expectEqual(@as(u32, 3), result.status);
     try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
     try std.testing.expectEqual(@as(usize, 0), result.size);
     zrFree(&state);
 
-    try std.testing.expectEqual(@as(?[*]u8, null), zrAllocInput(&state, source.len));
+    // Exceed retained capacity so input allocation also reaches the failing backing allocator.
+    try std.testing.expectEqual(@as(?[*]u8, null), zrAllocInput(&state, state.arena.queryCapacity()));
     zrFree(&state);
     backing.fail_index = std.math.maxInt(usize);
+    backing.resize_fail_index = std.math.maxInt(usize);
 
     try testSnapshot(&state, source, .zig, 3);
 }
