@@ -9,7 +9,11 @@ import java.nio.file.Path
 object Loader {
 
     fun load(binaryPath: String = System.getProperty("zigAstBinaryPath")): Handles {
-        val lib = SymbolLookup.libraryLookup(Path.of(binaryPath), Arena.global())
+        return loadFromPath(Path.of(binaryPath))
+    }
+
+    fun loadFromPath(binaryPath: Path): Handles {
+        val lib = SymbolLookup.libraryLookup(binaryPath, Arena.global())
         val symbol = lib.findOrThrow("zrParse")
         val linker = Linker.nativeLinker()
         val zrStartSession = linker.downcallHandle(lib.findOrThrow("zrStartSession"), Layout.Functions.zrStartSession)

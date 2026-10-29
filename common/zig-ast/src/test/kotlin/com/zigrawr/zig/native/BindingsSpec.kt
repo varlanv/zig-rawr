@@ -14,7 +14,7 @@ import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-val handles = Loader.load()
+val handles = BundledBindingsLoader.load()
 
 fun useBindings(block: (bindings: Bindings) -> Unit) {
     val bindings = Bindings(handles)

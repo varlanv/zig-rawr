@@ -9,9 +9,14 @@ pub fn build(b: *std.Build) !void {
         "strip",
         "Remove debug information",
     ) orelse false;
+    const libName = b.option(
+        []const u8,
+        "libName",
+        "Library name",
+    ) orelse "zigrawrAst";
 
     const exe = b.addExecutable(.{
-        .name = "zigrawrAst",
+        .name = libName,
         .root_module = b.createModule(.{
             .strip = strip,
             .root_source_file = b.path("src/main.zig"),
@@ -23,7 +28,7 @@ pub fn build(b: *std.Build) !void {
 
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
-        .name = "zigrawrAst",
+        .name = libName,
         .root_module = b.createModule(.{
             .strip = strip,
             .root_source_file = b.path("src/root.zig"),
