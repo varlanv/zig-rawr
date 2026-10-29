@@ -9,7 +9,7 @@ object IntellijLog {
         val log = logger<IntellijLog>()
         return Log(enabled = true, sink = object : Log.Sink {
             override fun print(message: String) {
-                log.info(message)
+                log.error(message)
             }
         })
     }

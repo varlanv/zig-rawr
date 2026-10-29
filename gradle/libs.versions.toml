@@ -22,7 +22,7 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 
 [plugins]
 intellij-platform = { id = "org.jetbrains.intellij.platform", version.ref = "intellijPlatformVersion" }
-internalConvention = { id = "com.varlanv.wrasse.gradle.internal-gradle-convention-plugin" }
+internalConvention = { id = "com.varlanv.gradle.internal-gradle-convention-plugin" }
 jmhPlugin = { id = "me.champeau.jmh", version.ref = "jmhPluginVersion" }
 kotest = { id = "io.kotest", version.ref = "kotestVersion" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlinVersion" }

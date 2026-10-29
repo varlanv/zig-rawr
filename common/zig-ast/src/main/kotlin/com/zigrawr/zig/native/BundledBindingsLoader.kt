@@ -2,11 +2,30 @@ package com.zigrawr.zig.native
 
 import com.zigrawr.lang.log.Log
 import java.nio.file.Paths
+import java.util.Properties
 
 object BundledBindingsLoader {
 
     context(log: Log)
     fun load(): Handles {
+        val pathPrefix = "/native/zigLib"
+        val metadataPath = "$pathPrefix/metadata"
+        val metadataIs = BundledBindingsLoader::class.java.getResourceAsStream(metadataPath)
+        if (metadataIs == null) {
+            log.debug { "Missing metadata file at path [ $metadataPath ]" }
+            TODO("Handle error")
+        }
+        val properties = Properties()
+        metadataIs.use {
+            properties.load(it)
+        }
+        val libraryName = properties["library.name"]?.toString()
+        if (libraryName == null) {
+            log.debug { "library.name property is missing" }
+            TODO("Handle error")
+        }
+        log.debug { "libraryName - [$libraryName]" }
+
         val osStr = when (SupportedOs.current) {
             SupportedOs.Linux -> "linux"
             SupportedOs.Mac -> "macos"
@@ -27,7 +46,8 @@ object BundledBindingsLoader {
         }
         log.debug { "Resolved architecture [ $archStr ]" }
 
-        val binaryPathStr = "/native/zigLib/${archStr}-${osStr}"
+        val binaryName = System.mapLibraryName(libraryName)
+        val binaryPathStr = "${pathPrefix}/${archStr}-${osStr}/${binaryName}"
         val binaryUrl = BundledBindingsLoader::class.java.getResource(binaryPathStr)
         if (binaryUrl == null) {
             log.debug { "Binary is missing at path [ $binaryPathStr ]" }

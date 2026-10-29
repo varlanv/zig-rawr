@@ -12,9 +12,12 @@ val isLocal = !providers.environmentVariable("CI").isPresent
 if (isLocal) {
     idea {
         module {
+            val zigDir = rootDir.resolve("native").resolve("zig")
             isDownloadJavadoc = true
             isDownloadSources = true
             excludeDirs.add(rootDir.resolve(".intellijPlatform"))
+            excludeDirs.add(zigDir.resolve("zig-out"))
+            excludeDirs.add(zigDir.resolve(".zig-cache"))
         }
     }
 }

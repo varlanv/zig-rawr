@@ -44,6 +44,4 @@ gradlePlugin {
 
 tasks.test {
     useJUnitPlatform()
-    systemProperty("wrasse.realRepoCatalogPath", file("../gradle/libs.versions.toml").absolutePath)
-    systemProperty("wrasse.realRepoRoot", file("..").absolutePath)
 }

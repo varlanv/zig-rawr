@@ -5,7 +5,6 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.SetProperty
 
-const val ZIG_LIB_NAME = "zigRawrNative"
 
 interface InternalConventionExtension {
 
@@ -25,6 +24,7 @@ interface InternalConventionExtension {
         val aggregateTaskName: String = "zigLibBinariesAggregate",
         val currentMachineTaskName: String = "zigLibBinary_currentMachine",
         val currentMachineBinaryPath: Property<String>,
+        val libraryName: String = "zigRawrNative",
         internal val requestedTargets: SetProperty<RequestedTarget>,
         val targetBinaryPaths: Provider<Map<ResolvedTarget, String>>,
     ) {
@@ -47,11 +47,11 @@ interface InternalConventionExtension {
 
         data class ResolvedTarget(val os: SupportedOs, val architecture: SupportedArch) {
 
-            fun toZigLibBinaryName(): String {
+            fun toZigLibBinaryName(libraryName: String): String {
                 return when (os) {
-                    SupportedOs.Linux -> "lib${ZIG_LIB_NAME}.so"
-                    SupportedOs.Mac -> "lib${ZIG_LIB_NAME}.dylib"
-                    SupportedOs.Windows -> "${ZIG_LIB_NAME}.dll"
+                    SupportedOs.Linux -> "lib${libraryName}.so"
+                    SupportedOs.Mac -> "lib${libraryName}.dylib"
+                    SupportedOs.Windows -> "${libraryName}.dll"
                 }
             }
 

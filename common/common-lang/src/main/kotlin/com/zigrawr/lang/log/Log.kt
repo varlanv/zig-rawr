@@ -15,6 +15,7 @@ class Log(val sink: Sink, val enabled: Boolean) {
     companion object {
 
         val noop: Log = Log(sink = Sink.noop, enabled = false)
+        val stderr: Log = Log(sink = Sink.stderr, enabled = false)
     }
 
     interface Sink {
@@ -26,6 +27,11 @@ class Log(val sink: Sink, val enabled: Boolean) {
             val noop: Sink = object : Sink {
                 override fun print(message: String) {
                     // no-op
+                }
+            }
+            val stderr: Sink = object : Sink {
+                override fun print(message: String) {
+                    System.err.println(message)
                 }
             }
         }

@@ -44,6 +44,7 @@ class InternalConventionPlugin : Plugin<Project> {
         fun run() {
             val targets = objects.setProperty(ZigLib.RequestedTarget::class.java)
                 .convention(setOf(ZigLib.RequestedTarget.CurrentMachine))
+            val zigLibraryName = "zigRawrNative"
             internalConventionExtension.zigLib.set(
                 ZigLib(
                     enabled = objects.property(Boolean::class.java).convention(false),
@@ -52,7 +53,7 @@ class InternalConventionPlugin : Plugin<Project> {
                         if (target == null) {
                             it
                         } else {
-                            it.convention(zigTargetLibBinaryPath(target))
+                            it.convention(zigTargetLibBinaryPath(target, zigLibraryName))
                         }
                     },
                     requestedTargets = targets,
@@ -64,12 +65,12 @@ class InternalConventionPlugin : Plugin<Project> {
                                     val target = ZigLib.ResolvedTarget.currentMachine ?: throw GradleException(
                                         unsupportedTargetErrorMessage()
                                     )
-                                    res[target] = zigTargetLibBinaryPath(target)
+                                    res[target] = zigTargetLibBinaryPath(target, zigLibraryName)
                                 }
 
                                 ZigLib.RequestedTarget.AllKnownSupported -> {
                                     for (target in ZigLib.ResolvedTarget.allSupported) {
-                                        res[target] = zigTargetLibBinaryPath(target)
+                                        res[target] = zigTargetLibBinaryPath(target, zigLibraryName)
                                     }
                                 }
                             }
@@ -99,8 +100,8 @@ class InternalConventionPlugin : Plugin<Project> {
                 configureCommonDependencies()
                 configureTests()
                 configurePublishing()
-                configureZigLibBinaryCurrentMachineTask()
-                configureZigLibBinaryAggregateTask()
+                configureZigLibBinaryCurrentMachineTask(zigLibraryName)
+                configureZigLibBinaryAggregateTask(zigLibraryName)
             }
         }
 
@@ -178,21 +179,21 @@ class InternalConventionPlugin : Plugin<Project> {
             }
         }
 
-        fun configureZigLibBinaryCurrentMachineTask() {
+        fun configureZigLibBinaryCurrentMachineTask(libraryName: String) {
             tasks.register(zigLib.currentMachineTaskName, Exec::class.java) {
                 val target =
                     ZigLib.ResolvedTarget.currentMachine ?: throw GradleException(unsupportedTargetErrorMessage())
                 val zigTarget = target.toZigTarget()
                 it.description = "Task for building binary for current machine - $zigTarget"
-                it.commandLine(zigBuildCmdForTarget(target))
+                it.commandLine(zigBuildCmdForTarget(target, libraryName))
                 it.workingDir = zigDir
-                it.outputs.file(zigTargetLibBinaryPath(target))
+                it.outputs.file(zigTargetLibBinaryPath(target, libraryName))
                 it.inputs.dir(zigDir.resolve("src"))
                 it.inputs.file(zigDir.resolve("build.zig"))
             }
         }
 
-        fun configureZigLibBinaryAggregateTask() {
+        fun configureZigLibBinaryAggregateTask(libraryName: String) {
             val zigLibBinariesAggregateTask = tasks.register(zigLib.aggregateTaskName) {
                 it.description = "Aggregate task for building Zig library binaries for requested targets"
             }
@@ -203,7 +204,7 @@ class InternalConventionPlugin : Plugin<Project> {
                         Exec::class.java
                     ) {
                         it.description = "Task for building binary for ${target.toZigTarget()}"
-                        it.commandLine(zigBuildCmdForTarget(target))
+                        it.commandLine(zigBuildCmdForTarget(target, libraryName))
                         it.workingDir = zigDir
                         it.outputs.file(binaryPath)
                         it.inputs.dir(zigDir.resolve("src"))
@@ -215,7 +216,7 @@ class InternalConventionPlugin : Plugin<Project> {
             }
         }
 
-        fun zigBuildCmdForTarget(target: ZigLib.ResolvedTarget): List<String> {
+        fun zigBuildCmdForTarget(target: ZigLib.ResolvedTarget, libraryName: String): List<String> {
             val targetStr = target.toZigTarget()
             return listOf(
                 "zig",
@@ -223,16 +224,16 @@ class InternalConventionPlugin : Plugin<Project> {
                 "-Dtarget=${targetStr}",
                 "-Dstrip=true",
                 "-Doptimize=fast",
-                "-DlibName=${ZIG_LIB_NAME}",
+                "-DlibName=${zigLib.libraryName}",
                 "-p",
                 "zig-out/${targetStr}"
             )
         }
 
-        fun zigTargetLibBinaryPath(target: ZigLib.ResolvedTarget): String {
+        fun zigTargetLibBinaryPath(target: ZigLib.ResolvedTarget, libraryName: String): String {
             return zigDir.resolve("zig-out").resolve(target.toZigTarget())
                 .resolve(if (target.os == ZigLib.SupportedOs.Windows) "bin" else "lib")
-                .resolve(target.toZigLibBinaryName()).absolutePath
+                .resolve(target.toZigLibBinaryName(libraryName)).absolutePath
         }
 
         private fun unsupportedTargetErrorMessage(): String = "Current machine os/architecture is not supported; see " +

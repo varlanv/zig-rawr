@@ -15,18 +15,17 @@ import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-val handles = context(Log.noop) { BundledBindingsLoader.load() }
-
-fun useBindings(block: (bindings: Bindings) -> Unit) {
-    val bindings = Bindings(handles)
-    try {
-        block(bindings)
-    } finally {
-        bindings.close()
-    }
-}
-
 class BindingsSpec : BaseSpec({
+    val handles = context(Log.stderr) { BundledBindingsLoader.load() }
+
+    fun useBindings(block: (bindings: Bindings) -> Unit) {
+        val bindings = Bindings(handles)
+        try {
+            block(bindings)
+        } finally {
+            bindings.close()
+        }
+    }
 
     should("encode source text as UTF-8") {
         useBindings { bindings ->
