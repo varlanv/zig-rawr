@@ -14,12 +14,6 @@ pub const NodePayload = extern struct {
     second: u32,
 };
 
-/// Inclusive start and exclusive end of a token.
-pub const TokenPositions = extern struct {
-    start: u32,
-    end: u32,
-};
-
 pub const SnapshotHeader = extern struct {
     magic: u32,
     abiVersion: u32,
@@ -41,7 +35,7 @@ pub const SnapshotHeader = extern struct {
     totalSize: u32,
 };
 
-pub const Layout = struct {
+pub const AstLayout = struct {
     tokenTags: u32,
     tokenPositions: u32,
     nodeTags: u32,
@@ -52,10 +46,4 @@ pub const Layout = struct {
     totalSize: u32,
 };
 
-/// Snapshot storage is owned by State and remains valid until zrFree or zrCloseSession.
-pub const ParseResult = extern struct {
-    data: ?[*]const u8 = null,
-    size: usize = 0,
-    /// 0: success; 1: invalid input or size; 3: out of memory.
-    status: u32 = 0,
-};
+pub const ParseResult = @import("shared.zig").ParseResult;

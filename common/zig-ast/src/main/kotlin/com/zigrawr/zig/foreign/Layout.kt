@@ -36,6 +36,15 @@ object Layout {
             ValueLayout.JAVA_INT.withName("start"),
             ValueLayout.JAVA_INT.withName("end"),
         )
+        val zrTokenizerHeader: StructLayout = MemoryLayout.structLayout(
+            ValueLayout.JAVA_INT.withName("magic"),
+            ValueLayout.JAVA_INT.withName("abiVersion"),
+            ValueLayout.JAVA_INT.withName("sourceLen"),
+            ValueLayout.JAVA_INT.withName("tokenCount"),
+            ValueLayout.JAVA_INT.withName("tokenTagsOffset"),
+            ValueLayout.JAVA_INT.withName("tokenPositionsOffset"),
+            ValueLayout.JAVA_INT.withName("totalSize"),
+        )
         val zrNodePayload: StructLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("first"),
             ValueLayout.JAVA_INT.withName("second"),
@@ -53,12 +62,18 @@ object Layout {
 
         val zrStartSession: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.ADDRESS)
         val zrCloseSession: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
-        val zrParse: FunctionDescriptor = FunctionDescriptor.of(
+        val zrParseAst: FunctionDescriptor = FunctionDescriptor.of(
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.JAVA_LONG,
             ValueLayout.JAVA_INT,
+        )
+        val zrParseTokens: FunctionDescriptor = FunctionDescriptor.of(
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.ADDRESS,
+            ValueLayout.JAVA_LONG,
         )
         val zrFree: FunctionDescriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
         val zrAllocInput: FunctionDescriptor =

@@ -1,18 +1,27 @@
 const std = @import("std");
 const Ast = @import("ziglang/Ast.zig");
+const tokenizer = @import("ziglang/tokenizer.zig");
 const shared = @import("shared.zig");
 const export_ast = @import("export_ast.zig");
+const export_tokenizer = @import("export_tokenizer.zig");
 const utf_conversion = @import("utf_conversion.zig");
 const Allocator = std.mem.Allocator;
-const ParseResult = export_ast.ParseResult;
 const SnapshotHeader = export_ast.SnapshotHeader;
+const TokenizerHeader = export_tokenizer.TokenizerHeader;
+const TokenizerLayout = export_tokenizer.TokenizerLayout;
+const ParseResult = shared.ParseResult;
 const ScopedState = shared.ScopedState;
 const NodePayload = export_ast.NodePayload;
-const TokenPositions = export_ast.TokenPositions;
+const TokenPositions = export_tokenizer.TokenPositions;
 const ErrorView = export_ast.ErrorView;
 const Mode = shared.Mode;
-const Layout = export_ast.Layout;
+const AstLayout = export_ast.AstLayout;
 const MAGIC = shared.MAGIC;
+const SnapshotError = error{ TooLarge, OutOfMemory, InvalidUtf8, InvalidOffset };
+const TokenList = std.MultiArrayList(struct {
+    tag: tokenizer.Token.Tag,
+    positions: TokenPositions,
+});
 
 /// Entrypoint to create single parse scope. Returned state is not thread-safe
 pub fn zrStartSession() ?*ScopedState {
@@ -33,7 +42,7 @@ pub fn zrCloseSession(state: *ScopedState) void {
 }
 
 /// Resets per-call allocations, retaining capacity for reuse.
-/// Failing to call this after calling `zrParse` will result in undefined behavior on in consumer library
+/// Invalidates input and snapshots from zrParseAst and zrParseTokens.
 pub fn zrFree(state: *ScopedState) void {
     if (state.tag != .parse and state.tag != .init and state.tag != .allocate and state.tag != .free) {
         panicOnInvaliStateTransition(state.tag, .free);
@@ -55,41 +64,89 @@ pub fn zrAllocInput(state: *ScopedState, sourceLen: usize) ?[*:0]u8 {
     return input.ptr;
 }
 
-pub fn zrParse(
+pub fn zrParseAst(
     state: *ScopedState,
     sourcePtr: ?[*]const u8,
     sourceLen: usize,
     mode: Mode,
 ) *const ParseResult {
+    const source = beginParse(state, sourcePtr, sourceLen) orelse return &state.result;
+    const parseMode: Ast.Mode = switch (mode) {
+        .zig => .zig,
+        .zon => .zon,
+        else => return &state.result,
+    };
+    return finishParse(state, parseInto(state.arena.allocator(), source, parseMode));
+}
+
+pub fn zrParseTokens(
+    state: *ScopedState,
+    sourcePtr: ?[*]const u8,
+    sourceLen: usize,
+) *const ParseResult {
+    const source = beginParse(state, sourcePtr, sourceLen) orelse return &state.result;
+    return finishParse(state, tokenizeInto(state.arena.allocator(), source));
+}
+
+fn beginParse(state: *ScopedState, sourcePtr: ?[*]const u8, sourceLen: usize) ?[:0]const u8 {
     if (state.tag != .allocate) {
         panicOnInvaliStateTransition(state.tag, .parse);
     }
     state.tag = .parse;
-    const result = &state.result;
-    result.* = .{ .status = 1 };
-    if (sourceLen > std.math.maxInt(u32)) return result;
-    const parseMode: Ast.Mode = switch (mode) {
-        .zig => .zig,
-        .zon => .zon,
-        else => return result,
-    };
-    if (sourcePtr == null and sourceLen != 0) return result;
+    state.result = .{ .status = 1 };
+    if (sourceLen > std.math.maxInt(u32)) return null;
+    if (sourcePtr == null and sourceLen != 0) return null;
     const ptr = sourcePtr orelse "".ptr;
-    if (ptr[sourceLen] != 0) return result;
-    const source = ptr[0..sourceLen :0];
-    const output = parseInto(
-        state.arena.allocator(),
-        source,
-        parseMode,
-    ) catch |err| {
-        result.status = switch (err) {
+    if (ptr[sourceLen] != 0) return null;
+    return ptr[0..sourceLen :0];
+}
+
+fn finishParse(state: *ScopedState, output: SnapshotError![]align(8) u8) *const ParseResult {
+    const bytes = output catch |err| {
+        state.result.status = switch (err) {
             error.TooLarge, error.InvalidUtf8, error.InvalidOffset => 1,
             error.OutOfMemory => 3,
         };
-        return result;
+        return &state.result;
     };
-    result.* = .{ .data = output.ptr, .size = output.len };
-    return result;
+    state.result = .{ .data = bytes.ptr, .size = bytes.len };
+    return &state.result;
+}
+
+fn tokenizeInto(gpa: Allocator, source: [:0]const u8) SnapshotError![]align(8) u8 {
+    var tokens = TokenList{};
+    defer tokens.deinit(gpa);
+    // Same source-size estimate as Ast.parse, without building parser data.
+    try tokens.ensureTotalCapacity(gpa, source.len / 8);
+
+    var scanner = tokenizer.Tokenizer.init(source);
+    while (true) {
+        const token = scanner.next();
+        try tokens.append(gpa, .{
+            .tag = token.tag,
+            .positions = .{
+                .start = @intCast(token.loc.start),
+                .end = @intCast(token.loc.end),
+            },
+        });
+        if (token.tag == .eof) break;
+    }
+
+    const layout = try tokenLayoutFor(@sizeOf(TokenizerHeader), tokens.len);
+    const output = try gpa.alignedAlloc(u8, .@"8", layout.totalSize);
+    errdefer gpa.free(output);
+    const sourceLen = try writeTokenData(source, output, layout, tokens.items(.tag), tokens.items(.positions));
+    const header: TokenizerHeader = .{
+        .magic = export_tokenizer.MAGIC,
+        .abiVersion = export_tokenizer.ABI_VERSION,
+        .sourceLen = sourceLen,
+        .tokenCount = @intCast(tokens.len),
+        .tokenTagsOffset = layout.tokenTags,
+        .tokenPositionsOffset = layout.tokenPositions,
+        .totalSize = layout.totalSize,
+    };
+    @memcpy(output[0..@sizeOf(TokenizerHeader)], std.mem.asBytes(&header));
+    return output;
 }
 
 fn panicOnInvaliStateTransition(
@@ -112,23 +169,54 @@ fn reserve(cursor: *usize, alignment: usize, count: usize, itemSize: usize) erro
     return @intCast(start);
 }
 
-fn layoutFor(ast: *const Ast) error{TooLarge}!Layout {
+fn tokenLayoutFor(headerSize: usize, tokenCount: usize) error{TooLarge}!TokenizerLayout {
+    var cursor = headerSize;
+    const tokenTags = try reserve(&cursor, 1, tokenCount, 1);
+    const tokenPositions = try reserve(&cursor, @alignOf(TokenPositions), tokenCount, @sizeOf(TokenPositions));
+    return .{
+        .tokenTags = tokenTags,
+        .tokenPositions = tokenPositions,
+        .totalSize = @intCast(cursor),
+    };
+}
+
+// Both snapshot layouts expose the same token sections. Convert directly into
+// the final buffer, reusing the converter's SIMD ASCII fast path.
+fn writeTokenData(
+    source: []const u8,
+    output: []align(8) u8,
+    layout: anytype,
+    tags: []const tokenizer.Token.Tag,
+    bytePositions: []const TokenPositions,
+) error{ InvalidUtf8, InvalidOffset }!u32 {
+    std.debug.assert(tags.len == bytePositions.len and tags.len > 0);
+    const tagBytes = std.mem.sliceAsBytes(tags);
+    @memcpy(output[layout.tokenTags..][0..tagBytes.len], tagBytes);
+    @memset(output[layout.tokenTags + tagBytes.len .. layout.tokenPositions], 0);
+
+    const byteOffsets = std.mem.bytesAsSlice(u32, std.mem.sliceAsBytes(bytePositions));
+    const positions: [*]u32 = @ptrCast(@alignCast(output.ptr + layout.tokenPositions));
+    const utf16Positions = positions[0..byteOffsets.len];
+    try utf_conversion.write_utf16_positions(source, byteOffsets, utf16Positions);
+    return utf16Positions[utf16Positions.len - 1];
+}
+
+fn layoutFor(ast: *const Ast) error{TooLarge}!AstLayout {
     if (ast.tokens.len > std.math.maxInt(u32) or
         ast.nodes.len > std.math.maxInt(u32) or
         ast.extra_data.len > std.math.maxInt(u32) or
         ast.errors.len > std.math.maxInt(u32)) return error.TooLarge;
 
-    var cursor: usize = @sizeOf(SnapshotHeader);
-    const tokenTags = try reserve(&cursor, 1, ast.tokens.len, 1);
-    const tokenPositions = try reserve(&cursor, @alignOf(TokenPositions), ast.tokens.len, @sizeOf(TokenPositions));
+    const tokens = try tokenLayoutFor(@sizeOf(SnapshotHeader), ast.tokens.len);
+    var cursor: usize = tokens.totalSize;
     const nodeTags = try reserve(&cursor, 1, ast.nodes.len, 1);
     const nodeMainTokens = try reserve(&cursor, 4, ast.nodes.len, 4);
     const nodePayloads = try reserve(&cursor, 4, ast.nodes.len, @sizeOf(NodePayload));
     const extraData = try reserve(&cursor, 4, ast.extra_data.len, 4);
     const errors = try reserve(&cursor, 8, ast.errors.len, @sizeOf(ErrorView));
     return .{
-        .tokenTags = tokenTags,
-        .tokenPositions = tokenPositions,
+        .tokenTags = tokens.tokenTags,
+        .tokenPositions = tokens.tokenPositions,
         .nodeTags = nodeTags,
         .nodeMainTokens = nodeMainTokens,
         .nodePayloads = nodePayloads,
@@ -142,8 +230,9 @@ fn parseInto(
     gpa: Allocator,
     source: [:0]const u8,
     mode: Ast.Mode,
-) (error{ TooLarge, OutOfMemory, InvalidUtf8, InvalidOffset })![]align(8) u8 {
-    const ast = try Ast.parse(gpa, source, .{ .mode = mode });
+) SnapshotError![]align(8) u8 {
+    var ast = try Ast.parse(gpa, source, .{ .mode = mode });
+    defer ast.deinit(gpa);
     const layout = try layoutFor(&ast);
     const bytePositions = try gpa.alloc(TokenPositions, ast.tokens.len);
     defer gpa.free(bytePositions);
@@ -153,15 +242,14 @@ fn parseInto(
             .end = @intCast(@as(usize, start) + ast.tokenSlice(@intCast(index)).len),
         };
     }
-    const byteOffsets = std.mem.bytesAsSlice(u32, std.mem.sliceAsBytes(bytePositions));
-    const utf16Positions = try utf_conversion.calculate_utf16_positions(gpa, source, byteOffsets);
-    defer gpa.free(utf16Positions);
     const output = try gpa.alignedAlloc(u8, .@"8", layout.totalSize);
+    errdefer gpa.free(output);
+    const sourceLen = try writeTokenData(source, output, layout, ast.tokens.items(.tag), bytePositions);
     const header: SnapshotHeader = .{
         .magic = MAGIC,
         .abiVersion = export_ast.ABI_VERSION,
         .mode = @backingInt(mode),
-        .sourceLen = utf16Positions[utf16Positions.len - 1],
+        .sourceLen = sourceLen,
         .tokenCount = @intCast(ast.tokens.len),
         .nodeCount = @intCast(ast.nodes.len),
         .extraDataCount = @intCast(ast.extra_data.len),
@@ -176,12 +264,6 @@ fn parseInto(
         .totalSize = layout.totalSize,
     };
     @memcpy(output[0..@sizeOf(SnapshotHeader)], std.mem.asBytes(&header));
-
-    const tokenTags: []const u8 = @as([*]const u8, @ptrCast(ast.tokens.items(.tag).ptr))[0..ast.tokens.len];
-    @memcpy(output[layout.tokenTags..][0..tokenTags.len], tokenTags);
-    @memset(output[layout.tokenTags + tokenTags.len .. layout.tokenPositions], 0);
-    const positionBytes = std.mem.sliceAsBytes(utf16Positions);
-    @memcpy(output[layout.tokenPositions..][0..positionBytes.len], positionBytes);
 
     const nodeTags: []const u8 = @as([*]const u8, @ptrCast(ast.nodes.items(.tag).ptr))[0..ast.nodes.len];
     @memcpy(output[layout.nodeTags..][0..nodeTags.len], nodeTags);
@@ -438,7 +520,7 @@ fn testSnapshot(state: *ScopedState, source: [:0]const u8, mode: Mode, minimumNo
     const input = zrAllocInput(state, source.len) orelse return error.OutOfMemory;
     @memcpy(input[0..source.len], source);
 
-    const result = zrParse(state, input, source.len, mode);
+    const result = zrParseAst(state, input, source.len, mode);
 
     try std.testing.expectEqual(@as(u32, 0), result.status);
     try std.testing.expect(result.size >= @sizeOf(SnapshotHeader));
@@ -452,6 +534,56 @@ fn testSnapshot(state: *ScopedState, source: [:0]const u8, mode: Mode, minimumNo
     try std.testing.expect(header.nodeCount >= minimumNodes);
     try std.testing.expect(header.tokenCount > 0);
     try std.testing.expectEqual(@as(u8, 0), output[header.nodeTagsOffset]);
+}
+
+test "tokenizer snapshot matches AST token ranges and supports session reuse" {
+    var state: ScopedState = .{ .arena = .init(std.testing.allocator) };
+    defer state.arena.deinit();
+    const sources = [_][:0]const u8{
+        "",
+        " \r\n\t// π€😀\n",
+        "\xef\xbb\xbfconst x = \"π€😀\"; // trailing π😀",
+        "/// docs\r\nconst text = \\\\π😀\n    \\\\more\n;",
+        "const x = \"π😀",
+        ".{ .answer = 42 }",
+    };
+    for (sources) |source| {
+        defer zrFree(&state);
+        const input = zrAllocInput(&state, source.len) orelse return error.OutOfMemory;
+        @memcpy(input[0..source.len], source);
+        const result = zrParseTokens(&state, input, source.len);
+        try std.testing.expectEqual(@as(u32, 0), result.status);
+        const output = result.data.?[0..result.size];
+        const header: *const TokenizerHeader = @ptrCast(@alignCast(output.ptr));
+        try std.testing.expectEqual(export_tokenizer.MAGIC, header.magic);
+        try std.testing.expectEqual(export_tokenizer.ABI_VERSION, header.abiVersion);
+        try std.testing.expectEqual(result.size, @as(usize, header.totalSize));
+
+        const astOutput = try parseInto(std.testing.allocator, source, .zig);
+        defer std.testing.allocator.free(astOutput);
+        const astHeader: *const SnapshotHeader = @ptrCast(@alignCast(astOutput.ptr));
+        try std.testing.expectEqual(astHeader.sourceLen, header.sourceLen);
+        try std.testing.expectEqual(astHeader.tokenCount, header.tokenCount);
+        try std.testing.expectEqualSlices(
+            u8,
+            astOutput[astHeader.tokenTagsOffset..][0..header.tokenCount],
+            output[header.tokenTagsOffset..][0..header.tokenCount],
+        );
+        const positionsSize = @as(usize, header.tokenCount) * @sizeOf(TokenPositions);
+        try std.testing.expectEqualSlices(
+            u8,
+            astOutput[astHeader.tokenPositionsOffset..][0..positionsSize],
+            output[header.tokenPositionsOffset..][0..positionsSize],
+        );
+    }
+
+    const invalid = "//\x80";
+    const input = zrAllocInput(&state, invalid.len) orelse return error.OutOfMemory;
+    defer zrFree(&state);
+    @memcpy(input[0..invalid.len], invalid);
+    const result = zrParseTokens(&state, input, invalid.len);
+    try std.testing.expectEqual(@as(u32, 1), result.status);
+    try std.testing.expect(result.data == null and result.size == 0);
 }
 
 test "parse into a state-owned snapshot and retain capacity after free" {
@@ -469,7 +601,7 @@ fn testTokenPositions(state: *ScopedState, source: [:0]const u8, mode: Mode, exp
     defer zrFree(state);
     const input = zrAllocInput(state, source.len) orelse return error.OutOfMemory;
     @memcpy(input[0..source.len], source);
-    const result = zrParse(state, input, source.len, mode);
+    const result = zrParseAst(state, input, source.len, mode);
     try std.testing.expectEqual(@as(u32, 0), result.status);
 
     const output = result.data.?[0..result.size];
@@ -518,7 +650,7 @@ test "malformed UTF-8 returns no snapshot and the session remains reusable" {
     for (sources) |source| {
         const input = zrAllocInput(&state, source.len) orelse return error.OutOfMemory;
         @memcpy(input[0..source.len], source);
-        const result = zrParse(&state, input, source.len, .zig);
+        const result = zrParseAst(&state, input, source.len, .zig);
         try std.testing.expectEqual(@as(u32, 1), result.status);
         try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
         try std.testing.expectEqual(@as(usize, 0), result.size);
@@ -533,7 +665,7 @@ test "failed parse clears the result and state can be reused after free" {
     defer state.arena.deinit();
     _ = zrAllocInput(&state, 1) orelse return error.OutOfMemory;
     state.result = .{ .data = "stale".ptr, .size = 5 };
-    const result = zrParse(&state, null, 1, .zig);
+    const result = zrParseAst(&state, null, 1, .zig);
 
     try std.testing.expectEqual(@as(u32, 1), result.status);
     try std.testing.expectEqual(@as(?[*]const u8, null), result.data);
@@ -552,7 +684,7 @@ test "out of memory returns no snapshot and permits reuse after free" {
     @memcpy(input[0..source.len], source);
     backing.fail_index = backing.alloc_index;
     backing.resize_fail_index = backing.resize_index;
-    const result = zrParse(&state, input, source.len, .zig);
+    const result = zrParseAst(&state, input, source.len, .zig);
 
     try std.testing.expect(backing.has_induced_failure);
     try std.testing.expectEqual(@as(u32, 3), result.status);

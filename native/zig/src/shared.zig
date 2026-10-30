@@ -1,10 +1,16 @@
 const std = @import("std");
-const export_ast = @import("export_ast.zig");
-const ParseResult = export_ast.ParseResult;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 /// *handshake* sanity check value so that consumer can check correctness against native binary.
 pub const MAGIC = 0x5A524153;
+
+/// Snapshot storage is owned by ScopedState until zrFree or zrCloseSession.
+pub const ParseResult = extern struct {
+    data: ?[*]const u8 = null,
+    size: usize = 0,
+    /// 0: success; 1: invalid input, UTF-8 or size; 3: out of memory.
+    status: u32 = 0,
+};
 
 pub const Mode = enum(u32) {
     zig = 0,

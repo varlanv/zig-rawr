@@ -1,6 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const LANE_LENGTH = std.simd.suggestVectorLength(u8);
+
 /// Converts sorted UTF-8 byte offsets at code point boundaries to UTF-16 code unit offsets.
 /// Validates the source prefix through the last requested offset. The caller owns the result.
 pub fn calculate_utf16_positions(
@@ -8,10 +10,22 @@ pub fn calculate_utf16_positions(
     source: []const u8,
     byteOffsets: []const u32,
 ) error{ OutOfMemory, InvalidUtf8, InvalidOffset }![]const u32 {
-    const sourceEnd: usize = if (byteOffsets.len == 0) 0 else byteOffsets[byteOffsets.len - 1];
-    if (sourceEnd > source.len) return error.InvalidOffset;
     const output = try gpa.alloc(u32, byteOffsets.len);
     errdefer gpa.free(output);
+    try write_utf16_positions(source, byteOffsets, output);
+    return output;
+}
+
+/// Allocation-free conversion into an equally sized destination. Offsets must be
+/// sorted and at code point boundaries. Input and output offset slices may be identical.
+pub fn write_utf16_positions(
+    source: []const u8,
+    byteOffsets: []const u32,
+    output: []u32,
+) error{ InvalidUtf8, InvalidOffset }!void {
+    std.debug.assert(byteOffsets.len == output.len);
+    const sourceEnd: usize = if (byteOffsets.len == 0) 0 else byteOffsets[byteOffsets.len - 1];
+    if (sourceEnd > source.len) return error.InvalidOffset;
     var bytePosition: usize = 0;
     var utf16Position: u32 = 0;
     var asciiEnd = ascii_prefix_length(source[0..sourceEnd]);
@@ -22,7 +36,7 @@ pub fn calculate_utf16_positions(
             output[idx] = offset;
             previous = offset;
         }
-        return output;
+        return;
     }
 
     for (byteOffsets, 0..) |offset, idx| {
@@ -54,12 +68,11 @@ pub fn calculate_utf16_positions(
         }
         output[idx] = utf16Position;
     }
-    return output;
 }
 
 fn ascii_prefix_length(source: []const u8) usize {
     var index: usize = 0;
-    if (std.simd.suggestVectorLength(u8)) |width| {
+    if (LANE_LENGTH) |width| {
         while (source.len - index >= width) {
             const chunk: @Vector(width, u8) = source[index..][0..width].*;
             const mask: @Int(.unsigned, width) = @bitCast(chunk >= @as(@Vector(width, u8), @splat(0x80)));

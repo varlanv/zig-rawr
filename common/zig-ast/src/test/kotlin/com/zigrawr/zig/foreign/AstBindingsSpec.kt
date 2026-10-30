@@ -4,6 +4,7 @@ import com.zigrawr.lang.bin.asList
 import com.zigrawr.lang.bin.asReadonly
 import com.zigrawr.lang.log.Log
 import com.zigrawr.zig.ast.ParseMode
+import com.zigrawr.zig.foreign.model.Ast
 import com.zigrawr.zig.foreign.model.ErrorExtraKind
 import com.zigrawr.zig.foreign.model.ErrorTag
 import com.zigrawr.zig.foreign.model.Mode
@@ -37,7 +38,7 @@ class BindingsSpec : BaseSpec({
     should("encode source text as UTF-8") {
         useBindings { bindings ->
             val source = "const x = \"π\";"
-            val ast = com.zigrawr.zig.foreign.model.Ast(bindings.parseChars(source, ParseMode.Zig))
+            val ast = Ast(bindings.ast.parseChars(source, ParseMode.Zig))
             ast.sourceLength() shouldBe source.length
         }
     }
@@ -45,8 +46,8 @@ class BindingsSpec : BaseSpec({
     should("parse source bytes") {
         useBindings { bindings ->
             val source = "const x = \"π\";"
-            val ast = com.zigrawr.zig.foreign.model.Ast(
-                bindings.parseBytes(
+            val ast = Ast(
+                bindings.ast.parseBytes(
                     source.toByteArray().asReadonly(), ParseMode.Zig
                 )
             )
@@ -60,7 +61,7 @@ class BindingsSpec : BaseSpec({
             val source = "const x = \"π\";"
             Files.writeString(path, source)
             useBindings { bindings ->
-                val ast = com.zigrawr.zig.foreign.model.Ast(bindings.parseAtPath(path))
+                val ast = Ast(bindings.ast.parseAtPath(path))
                 ast.sourceLength() shouldBe source.length
             }
         }
@@ -68,8 +69,8 @@ class BindingsSpec : BaseSpec({
 
     should("read the native AST snapshot") {
         useBindings { bindings ->
-            val ast = com.zigrawr.zig.foreign.model.Ast(
-                bindings.parseChars(
+            val ast = Ast(
+                bindings.ast.parseChars(
                     "const x = \"π\";",
                     ParseMode.Zig
                 )
@@ -88,7 +89,7 @@ class BindingsSpec : BaseSpec({
     should("read native parse errors") {
         useBindings { bindings ->
             val ast =
-                com.zigrawr.zig.foreign.model.Ast(bindings.parseChars("const = ;", ParseMode.Zig))
+                Ast(bindings.ast.parseChars("const = ;", ParseMode.Zig))
             (ast.errorCount() > 0) shouldBe true
             ast.errorTag(0) shouldBe ErrorTag.EXPECTED_TOKEN
             (ast.errorToken(0) in 0 until ast.tokenCount()) shouldBe true
@@ -102,7 +103,7 @@ class BindingsSpec : BaseSpec({
     should("expose UTF-16 token ranges and source length including trailing comments") {
         useBindings { bindings ->
             val source = "const x = \"π€😀\"; \n// π€😀\n"
-            val ast = com.zigrawr.zig.foreign.model.Ast(bindings.parseChars(source, ParseMode.Zig))
+            val ast = Ast(bindings.ast.parseChars(source, ParseMode.Zig))
             val expectedRanges = listOf(0 to 5, 6 to 7, 8 to 9, 10 to 16, 16 to 17, source.length to source.length)
 
             ast.sourceLength() shouldBe source.length
@@ -122,7 +123,7 @@ class BindingsSpec : BaseSpec({
     should("expose UTF-16 offsets for ZON snapshots") {
         useBindings { bindings ->
             val source = ".{ .text = \"π€😀\" }"
-            val ast = com.zigrawr.zig.foreign.model.Ast(bindings.parseChars(source, ParseMode.Zon))
+            val ast = Ast(bindings.ast.parseChars(source, ParseMode.Zon))
 
             ast.mode() shouldBe Mode.Zon
             ast.sourceLength() shouldBe source.length
@@ -136,7 +137,7 @@ class BindingsSpec : BaseSpec({
     should("exclude whitespace and ordinary comments from token ranges") {
         useBindings { bindings ->
             val source = "  const  x // π😀\n = \"€\" ; // tail"
-            val ast = com.zigrawr.zig.foreign.model.Ast(bindings.parseChars(source, ParseMode.Zig))
+            val ast = Ast(bindings.ast.parseChars(source, ParseMode.Zig))
             List(ast.tokenCount()) { index ->
                 val positions = ast.tokenPositions(index)
                 source.substring(positions.start, positions.end)
@@ -148,7 +149,7 @@ class BindingsSpec : BaseSpec({
         useBindings { bindings ->
             for (source in listOf("", " \r\n\t", "// π😀\n", "const x = \"π😀")) {
                 val ast =
-                    com.zigrawr.zig.foreign.model.Ast(bindings.parseChars(source, ParseMode.Zig))
+                    Ast(bindings.ast.parseChars(source, ParseMode.Zig))
                 val eof = ast.tokenPositions(ast.tokenCount() - 1)
                 eof.start shouldBe source.length
                 eof.end shouldBe source.length
@@ -164,7 +165,7 @@ class BindingsSpec : BaseSpec({
     should("check token position indices") {
         useBindings { bindings ->
             val ast =
-                com.zigrawr.zig.foreign.model.Ast(bindings.parseChars("const x = 1;", ParseMode.Zig))
+                Ast(bindings.ast.parseChars("const x = 1;", ParseMode.Zig))
             shouldThrow<IndexOutOfBoundsException> { ast.tokenPositions(-1) }
             shouldThrow<IndexOutOfBoundsException> { ast.tokenPositions(ast.tokenCount()) }
         }
@@ -172,18 +173,18 @@ class BindingsSpec : BaseSpec({
 
     should("reject snapshots with an unsupported ABI version") {
         useBindings { bindings ->
-            val snapshot = bindings.parseChars("const x = 1;", ParseMode.Zig)
+            val snapshot = bindings.ast.parseChars("const x = 1;", ParseMode.Zig)
             val abiVersionOffset = Layout.Data.zrSnapshotHeader.byteOffset(groupElement("abiVersion")).toInt()
             snapshot.setPackedInt(abiVersionOffset, 2)
 
-            shouldThrow<IllegalArgumentException> { com.zigrawr.zig.foreign.model.Ast(snapshot) }
+            shouldThrow<IllegalArgumentException> { Ast(snapshot) }
         }
     }
 
     should("iterate native tokens and nodes") {
         useBindings { bindings ->
-            val ast = com.zigrawr.zig.foreign.model.Ast(
-                bindings.parseChars(
+            val ast = Ast(
+                bindings.ast.parseChars(
                     "const x = \"π\";",
                     ParseMode.Zig
                 )
@@ -221,22 +222,22 @@ class BindingsSpec : BaseSpec({
                 repeat(1000) { append("const x$it = $it;\n") }
             }
 
-            countedBindings.parseChars(small, ParseMode.Zig)
+            countedBindings.ast.parseChars(small, ParseMode.Zig)
             val afterFirst = counter.calls
             afterFirst shouldBe 1
-            countedBindings.parseChars(small, ParseMode.Zig)
+            countedBindings.ast.parseChars(small, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 1
 
-            val grown = countedBindings.parseChars(large, ParseMode.Zig)
+            val grown = countedBindings.ast.parseChars(large, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 2
-            com.zigrawr.zig.foreign.model.Ast(grown).sourceLength() shouldBe large.length
+            Ast(grown).sourceLength() shouldBe large.length
 
-            countedBindings.parseChars(large, ParseMode.Zig)
+            countedBindings.ast.parseChars(large, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 3
 
-            val shrunk = countedBindings.parseChars(small, ParseMode.Zig)
+            val shrunk = countedBindings.ast.parseChars(small, ParseMode.Zig)
             counter.calls shouldBe afterFirst + 4
-            com.zigrawr.zig.foreign.model.Ast(shrunk).sourceLength() shouldBe small.length
+            Ast(shrunk).sourceLength() shouldBe small.length
         } finally {
             countedBindings.close()
         }
@@ -245,17 +246,17 @@ class BindingsSpec : BaseSpec({
     should("keep returned snapshots valid after later parses and close") {
         val bindings = Bindings(handles)
         val snapshot = try {
-            val first = bindings.parseChars("const x = \"π\";", ParseMode.Zig)
+            val first = bindings.ast.parseChars("const x = \"π\";", ParseMode.Zig)
             val original = first.asList().toList()
-            bindings.parseChars(".{ .answer = 42 }", ParseMode.Zon)
-            bindings.parseChars("const = ;".repeat(1000), ParseMode.Zig)
+            bindings.ast.parseChars(".{ .answer = 42 }", ParseMode.Zon)
+            bindings.ast.parseChars("const = ;".repeat(1000), ParseMode.Zig)
             first.asList() shouldBe original
             first
         } finally {
             bindings.close()
         }
-        com.zigrawr.zig.foreign.model.Ast(snapshot).sourceLength() shouldBe 14
-        com.zigrawr.zig.foreign.model.Ast(snapshot).errorCount() shouldBe 0
+        Ast(snapshot).sourceLength() shouldBe 14
+        Ast(snapshot).errorCount() shouldBe 0
     }
 
     should("parse concurrently through the same bindings instance") {
@@ -266,7 +267,7 @@ class BindingsSpec : BaseSpec({
         }
         val reference = Bindings(handles)
         val expected = try {
-            sources.map { reference.parseChars(it, ParseMode.Zig).asList().toList() }
+            sources.map { reference.ast.parseChars(it, ParseMode.Zig).asList().toList() }
         } finally {
             reference.close()
         }
@@ -279,9 +280,9 @@ class BindingsSpec : BaseSpec({
                         val bytes = source.toByteArray().asReadonly()
                         repeat(30) { iteration ->
                             val snapshot = if (iteration % 2 == 0) {
-                                bindings.parseChars(source, ParseMode.Zig)
+                                bindings.ast.parseChars(source, ParseMode.Zig)
                             } else {
-                                bindings.parseBytes(bytes, ParseMode.Zig)
+                                bindings.ast.parseBytes(bytes, ParseMode.Zig)
                             }
                             snapshot.asList() shouldBe expected[index]
                         }
@@ -309,8 +310,12 @@ private class ParseCallCounter {
             MethodType.methodType(MemorySegment::class.java, MemorySegment::class.java),
         ).bindTo(this)
         return Handles(
-            handles.zrStartSession, handles.zrCloseSession,
-            MethodHandles.filterReturnValue(handles.zrParse, record), handles.zrFree, handles.zrAllocInput,
+            handles.zrStartSession,
+            handles.zrCloseSession,
+            MethodHandles.filterReturnValue(handles.zrParseAst, record),
+            handles.zrParseTokens,
+            handles.zrFree,
+            handles.zrAllocInput,
         )
     }
 }
