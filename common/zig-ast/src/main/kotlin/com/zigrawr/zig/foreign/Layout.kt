@@ -27,6 +27,7 @@ object Layout {
             ValueLayout.JAVA_INT.withName("tokenPositionsOffset"),
             ValueLayout.JAVA_INT.withName("nodeTagsOffset"),
             ValueLayout.JAVA_INT.withName("nodeMainTokensOffset"),
+            ValueLayout.JAVA_INT.withName("nodePositionsOffset"),
             ValueLayout.JAVA_INT.withName("nodePayloadsOffset"),
             ValueLayout.JAVA_INT.withName("extraDataOffset"),
             ValueLayout.JAVA_INT.withName("errorsOffset"),

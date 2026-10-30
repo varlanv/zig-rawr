@@ -55,6 +55,10 @@ internal val headerNodeMainTokensOffset =
     Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodeMainTokensOffset")).toInt()
 
 @PublishedApi
+internal val headerNodePositionsOffset =
+    Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodePositionsOffset")).toInt()
+
+@PublishedApi
 internal val headerNodePayloadsOffset =
     Layout.Data.zrSnapshotHeader.byteOffset(groupElement("nodePayloadsOffset")).toInt()
 
@@ -101,6 +105,7 @@ value class Ast(@PublishedApi internal val bytes: MutBytes) {
         checkSection(headerTokenPositionsOffset, headerTokenCountOffset, tokenPositionsSize)
         checkSection(headerNodeTagsOffset, headerNodeCountOffset, tagSize)
         checkSection(headerNodeMainTokensOffset, headerNodeCountOffset, wordSize)
+        checkSection(headerNodePositionsOffset, headerNodeCountOffset, tokenPositionsSize)
         checkSection(headerNodePayloadsOffset, headerNodeCountOffset, nodePayloadSize)
         checkSection(headerExtraDataOffset, headerExtraDataCountOffset, wordSize)
         checkSection(headerErrorsOffset, headerErrorCountOffset, errorViewSize)
@@ -124,6 +129,21 @@ value class Ast(@PublishedApi internal val bytes: MutBytes) {
             val payloadWord0 = bytes.getPackedInt(payloadOffset + nodePayloadFirstOffset)
             val payloadWord1 = bytes.getPackedInt(payloadOffset + nodePayloadSecondOffset)
             block(index, tag, mainToken, payloadWord0, payloadWord1)
+            index++
+        }
+    }
+
+    /** Inlined iteration over node tags and complete half-open UTF-16 ranges, including the root. */
+    inline fun forEachNodePosition(block: (nodeIndex: Int, nodeTag: NodeTag, positions: TokenPositions) -> Unit) {
+        var index = 0
+        val count = nodeCount()
+        val tagsOffset = bytes.getPackedInt(headerNodeTagsOffset)
+        val positionsOffset = bytes.getPackedInt(headerNodePositionsOffset)
+        val entries = NodeTag.entries
+        while (index < count) {
+            val tag = entries[bytes[tagsOffset + index * tagSize].toInt() and 0xFF]
+            val positions = TokenPositions(PackedLong2(bytes.getPackedLong(positionsOffset + index * tokenPositionsSize)))
+            block(index, tag, positions)
             index++
         }
     }
@@ -197,6 +217,21 @@ value class Ast(@PublishedApi internal val bytes: MutBytes) {
 
     fun nodeMainToken(index: Int): Int =
         word(entryOffset(index, headerNodeCountOffset, headerNodeMainTokensOffset, wordSize))
+
+    /** Half-open UTF-16 range of the complete node, including declaration modifiers. */
+    fun nodePositions(index: Int): TokenPositions =
+        TokenPositions(
+            PackedLong2(
+                bytes.getPackedLong(
+                    entryOffset(
+                        index,
+                        headerNodeCountOffset,
+                        headerNodePositionsOffset,
+                        tokenPositionsSize,
+                    )
+                )
+            )
+        )
 
     fun extraData(index: Int): Int =
         word(entryOffset(index, headerExtraDataCountOffset, headerExtraDataOffset, wordSize))

@@ -6,6 +6,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <extendWordSelectionHandler implementation="com.zigrawr.jbplugin.selection.ZigSelectionHandler"/>
         <lineIndentProvider implementation="com.zigrawr.jbplugin.indent.ZigLineIndentProvider"/>
         <enterBetweenBracesDelegate
             language="Zig"

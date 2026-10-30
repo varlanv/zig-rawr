@@ -57,7 +57,7 @@ private val tokenHighlights = buildMap<IElementType, Array<TextAttributesKey>> {
 
 class ZigSyntaxHighlighter : SyntaxHighlighterBase() {
 
-    override fun getHighlightingLexer(): Lexer = ZigLexer(service<IdeProcessState>())
+    override fun getHighlightingLexer(): Lexer = ZigLexer(IdeProcessState.getInstance())
 
     override fun getTokenHighlights(tokenType: IElementType): Array<TextAttributesKey> =
         tokenHighlights[tokenType] ?: TextAttributesKey.EMPTY_ARRAY

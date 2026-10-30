@@ -211,6 +211,7 @@ fn layoutFor(ast: *const Ast) error{TooLarge}!AstLayout {
     var cursor: usize = tokens.totalSize;
     const nodeTags = try reserve(&cursor, 1, ast.nodes.len, 1);
     const nodeMainTokens = try reserve(&cursor, 4, ast.nodes.len, 4);
+    const nodePositions = try reserve(&cursor, @alignOf(TokenPositions), ast.nodes.len, @sizeOf(TokenPositions));
     const nodePayloads = try reserve(&cursor, 4, ast.nodes.len, @sizeOf(NodePayload));
     const extraData = try reserve(&cursor, 4, ast.extra_data.len, 4);
     const errors = try reserve(&cursor, 8, ast.errors.len, @sizeOf(ErrorView));
@@ -219,6 +220,7 @@ fn layoutFor(ast: *const Ast) error{TooLarge}!AstLayout {
         .tokenPositions = tokens.tokenPositions,
         .nodeTags = nodeTags,
         .nodeMainTokens = nodeMainTokens,
+        .nodePositions = nodePositions,
         .nodePayloads = nodePayloads,
         .extraData = extraData,
         .errors = errors,
@@ -258,6 +260,7 @@ fn parseInto(
         .tokenPositionsOffset = layout.tokenPositions,
         .nodeTagsOffset = layout.nodeTags,
         .nodeMainTokensOffset = layout.nodeMainTokens,
+        .nodePositionsOffset = layout.nodePositions,
         .nodePayloadsOffset = layout.nodePayloads,
         .extraDataOffset = layout.extraData,
         .errorsOffset = layout.errors,
@@ -271,6 +274,11 @@ fn parseInto(
     const nodeMainTokens = std.mem.sliceAsBytes(ast.nodes.items(.main_token));
     @memcpy(output[layout.nodeMainTokens..][0..nodeMainTokens.len], nodeMainTokens);
 
+    // Reuse converted token boundaries; node order is not source order, so a
+    // separate byte-to-UTF-16 conversion would require sorting or another map.
+    const tokenPositions: [*]const TokenPositions = @ptrCast(@alignCast(output.ptr + layout.tokenPositions));
+    const nodePositions: [*]TokenPositions = @ptrCast(@alignCast(output.ptr + layout.nodePositions));
+    try writeNodePositions(gpa, &ast, tokenPositions[0..ast.tokens.len], nodePositions[0..ast.nodes.len]);
     for (0..ast.nodes.len) |index| {
         const payload = nodePayload(&ast, index);
         const start = @as(usize, layout.nodePayloads) + index * @sizeOf(NodePayload);
@@ -287,6 +295,45 @@ fn parseInto(
         @memcpy(output[start..][0..@sizeOf(ErrorView)], std.mem.asBytes(&view));
     }
     return output;
+}
+
+fn writeNodePositions(
+    gpa: Allocator,
+    ast: *const Ast,
+    tokens: []const TokenPositions,
+    positions: []TokenPositions,
+) Allocator.Error!void {
+    // Ast.lastToken assumes prototypes have a return type, but error recovery
+    // can leave it absent. Use a bounds-only view treating those prototypes as
+    // leaves at their fn token, including when an ancestor walks through them.
+    // Only the tag array is copied, only when needed; the parsed AST and the
+    // serialized node tags/payloads stay untouched. Never deinit this borrowed view.
+    var bounds = ast.*;
+    var fallbackTags: ?[]Ast.Node.Tag = null;
+    defer if (fallbackTags) |tags| gpa.free(tags);
+    if (ast.errors.len != 0) {
+        for (ast.nodes.items(.tag), 0..) |tag, index| {
+            const node: Ast.Node.Index = @fromBackingInt(@intCast(index));
+            const incomplete = switch (tag) {
+                .fn_proto_simple => ast.nodeData(node).opt_node_and_opt_node[1] == .none,
+                .fn_proto, .fn_proto_one, .fn_proto_multi => ast.nodeData(node).extra_and_opt_node[1] == .none,
+                else => false,
+            };
+            if (incomplete) {
+                if (fallbackTags == null) fallbackTags = try gpa.dupe(Ast.Node.Tag, ast.nodes.items(.tag));
+                fallbackTags.?[index] = .identifier;
+            }
+        }
+        if (fallbackTags) |tags| bounds.nodes.ptrs[@backingInt(Ast.NodeList.Field.tag)] = @ptrCast(tags.ptr);
+    }
+    positions[0] = .{ .start = 0, .end = tokens[tokens.len - 1].end };
+    for (positions[1..], 1..) |*position, index| {
+        const node: Ast.Node.Index = @fromBackingInt(@intCast(index));
+        position.* = .{
+            .start = tokens[bounds.firstToken(node)].start,
+            .end = tokens[bounds.lastToken(node)].end,
+        };
+    }
 }
 
 fn errorView(err: Ast.Error) ErrorView {
@@ -584,6 +631,30 @@ test "tokenizer snapshot matches AST token ranges and supports session reuse" {
     const result = zrParseTokens(&state, input, invalid.len);
     try std.testing.expectEqual(@as(u32, 1), result.status);
     try std.testing.expect(result.data == null and result.size == 0);
+}
+
+test "node positions stay bounded during incomplete edits" {
+    const sources = [_][]const u8{
+        "/// docs\npub fn f(a: []const u8) void { const x = foo(a, 2); if (x) { return; } else { bar(); } }",
+        "const T = struct { field: []const u8 = \"x\", pub fn call(self: *@This()) void {} };",
+        "fn f() void { const x = .{ .a = [_]u8{1, 2}, .b = foo(1, 2), }; for (x.a, 0..) |v, i| { _ = v + i; } }",
+        "const F = *const fn (a: fn () void) callconv(.c) void;",
+        "fn f(x: u8) void { switch (x) { 0...2 => foo(), else => return, } }",
+    };
+    for (sources) |source| {
+        for (0..source.len + 1) |len| {
+            const prefix = try std.testing.allocator.allocSentinel(u8, len, 0);
+            defer std.testing.allocator.free(prefix);
+            @memcpy(prefix, source[0..len]);
+            const output = try parseInto(std.testing.allocator, prefix, .zig);
+            defer std.testing.allocator.free(output);
+            const header: *const SnapshotHeader = @ptrCast(@alignCast(output.ptr));
+            const positions: [*]const TokenPositions = @ptrCast(@alignCast(output.ptr + header.nodePositionsOffset));
+            for (positions[0..header.nodeCount]) |span| {
+                try std.testing.expect(span.start <= span.end and span.end <= len);
+            }
+        }
+    }
 }
 
 test "parse into a state-owned snapshot and retain capacity after free" {

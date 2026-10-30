@@ -29,6 +29,8 @@ pub const SnapshotHeader = extern struct {
     tokenPositionsOffset: u32,
     nodeTagsOffset: u32,
     nodeMainTokensOffset: u32,
+    /// Byte offset of UTF-16 half-open node ranges, using TokenPositions entries.
+    nodePositionsOffset: u32,
     nodePayloadsOffset: u32,
     extraDataOffset: u32,
     errorsOffset: u32,
@@ -40,6 +42,7 @@ pub const AstLayout = struct {
     tokenPositions: u32,
     nodeTags: u32,
     nodeMainTokens: u32,
+    nodePositions: u32,
     nodePayloads: u32,
     extraData: u32,
     errors: u32,

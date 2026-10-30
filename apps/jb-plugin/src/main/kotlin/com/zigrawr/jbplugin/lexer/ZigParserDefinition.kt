@@ -31,11 +31,13 @@ private val STRING_LITERAL_TOKENS = TokenSet.create(
 
 class ZigParserDefinition : ParserDefinition {
 
-    override fun createLexer(project: Project?): Lexer = ZigLexer(service<IdeProcessState>())
+    override fun createLexer(project: Project?): Lexer = ZigLexer(IdeProcessState.getInstance())
 
     override fun createParser(project: Project?): PsiParser = PsiParser { root, builder ->
         val file = builder.mark()
-        while (!builder.eof()) builder.advanceLexer()
+        while (!builder.eof()) {
+            builder.advanceLexer()
+        }
         file.done(root)
         builder.treeBuilt
     }

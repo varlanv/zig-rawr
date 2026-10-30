@@ -2,6 +2,7 @@ package com.zigrawr.jbplugin
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.zigrawr.jbplugin.log.IntellijLog
 import com.zigrawr.zig.foreign.Bindings
@@ -18,6 +19,11 @@ class IdeProcessState : Disposable {
         bindings.close()
     }
 
+    companion object {
+
+        @JvmStatic
+        fun getInstance(): IdeProcessState = service()
+    }
 }
 
 @Service(Service.Level.PROJECT)

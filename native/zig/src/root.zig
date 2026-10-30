@@ -18,7 +18,7 @@ const ParseResult = shared.ParseResult;
 comptime {
 
     // sanity check because this assumptions need to hold on Kotlin side as well
-    std.debug.assert(@sizeOf(SnapshotHeader) == 64);
+    std.debug.assert(@sizeOf(SnapshotHeader) == 68);
     std.debug.assert(@sizeOf(TokenizerHeader) == 28);
     std.debug.assert(@sizeOf(NodePayload) == 8);
     std.debug.assert(@sizeOf(TokenPositions) == 8);
