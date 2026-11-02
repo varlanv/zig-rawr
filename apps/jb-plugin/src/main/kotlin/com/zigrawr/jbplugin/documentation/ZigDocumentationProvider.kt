@@ -1,6 +1,7 @@
 package com.zigrawr.jbplugin.documentation
 
 import com.intellij.codeInsight.TargetElementUtil
+import com.intellij.openapi.project.DumbAware
 import com.intellij.platform.backend.documentation.DocumentationTarget
 import com.intellij.platform.backend.documentation.DocumentationTargetProvider
 import com.intellij.psi.PsiDocumentManager
@@ -8,7 +9,7 @@ import com.intellij.psi.PsiFile
 import com.zigrawr.jbplugin.declaration.ZigDeclarationResolver
 import com.zigrawr.jbplugin.file.ZigFileType
 
-class ZigDocumentationProvider : DocumentationTargetProvider {
+class ZigDocumentationProvider : DocumentationTargetProvider, DumbAware {
 
     override fun documentationTargets(
         file: PsiFile,

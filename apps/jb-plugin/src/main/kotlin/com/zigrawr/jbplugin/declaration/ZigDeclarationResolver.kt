@@ -1,11 +1,13 @@
 package com.zigrawr.jbplugin.declaration
 
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.zigrawr.jbplugin.file.ZigFileType
+import com.zigrawr.jbplugin.toolchain.ZigToolchainService
 import com.zigrawr.zig.foreign.model.TokenTag
 
 private const val MAX_RESOLUTION_DEPTH = 32
@@ -131,6 +133,10 @@ internal object ZigDeclarationResolver {
         val close = symbols.matching[token - 1]
         if (close != token + 1 && !(close == token + 2 && symbols.tag(token + 1) == TokenTag.COMMA)) return null
         val path = symbols.string(token) ?: return null
+        if (path == "std") {
+            val target = file.project.service<ZigToolchainService>().standardLibraryFile() ?: return null
+            return PsiManager.getInstance(file.project).findFile(target)
+        }
         if (!path.endsWith(".zig") || path.indexOf('\u0000') >= 0) return null
         val directory = file.virtualFile?.parent ?: return null
         val target = directory.findFileByRelativePath(path) ?: return null

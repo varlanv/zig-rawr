@@ -6,6 +6,10 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <projectConfigurable parentId="language" id="com.zigrawr.toolchain" displayName="Zig"
+                             instance="com.zigrawr.jbplugin.toolchain.ZigToolchainConfigurable"/>
+        <additionalLibraryRootsProvider implementation="com.zigrawr.jbplugin.toolchain.ZigLibraryRootsProvider"/>
+        <postStartupActivity implementation="com.zigrawr.jbplugin.toolchain.ZigToolchainStartupActivity"/>
         <platform.backend.documentation.targetProvider implementation="com.zigrawr.jbplugin.documentation.ZigDocumentationProvider"/>
         <highlightUsagesHandlerFactory implementation="com.zigrawr.jbplugin.highlight.ZigHighlightUsagesHandlerFactory"/>
         <gotoDeclarationHandler implementation="com.zigrawr.jbplugin.declaration.ZigDeclarationHandler"/>
