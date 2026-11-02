@@ -5,7 +5,15 @@
     <description>Zig language support. todotofill40charsrequirement</description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.cidr.debugger</depends>
+    <depends>com.intellij.modules.clion</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <configurationType implementation="com.zigrawr.jbplugin.run.ZigRunConfigurationType"/>
+        <runConfigurationProducer implementation="com.zigrawr.jbplugin.run.ZigRunConfigurationProducer"/>
+        <runConfigurationProducer implementation="com.zigrawr.jbplugin.run.ZigFileTestsConfigurationProducer"/>
+        <runLineMarkerContributor language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigRunLineMarkerContributor"/>
+        <programRunner implementation="com.zigrawr.jbplugin.run.ZigProgramRunner"/>
+        <programRunner implementation="com.zigrawr.jbplugin.run.ZigDebugRunner"/>
         <projectConfigurable parentId="language" id="com.zigrawr.toolchain" displayName="Zig"
                              instance="com.zigrawr.jbplugin.toolchain.ZigToolchainConfigurable"/>
         <additionalLibraryRootsProvider implementation="com.zigrawr.jbplugin.toolchain.ZigLibraryRootsProvider"/>
@@ -36,5 +44,9 @@
             extensions="zon"
             implementationClass="com.zigrawr.jbplugin.file.ZonFileType"
             fieldName="INSTANCE"/>
+    </extensions>
+    <extensions defaultExtensionNs="cidr.debugger">
+        <lineBreakpointFileTypesProvider implementation="com.zigrawr.jbplugin.run.ZigLineBreakpointFileTypesProvider"/>
+        <editorsExtension language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigDebuggerEditorsExtension"/>
     </extensions>
 </idea-plugin>

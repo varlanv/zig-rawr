@@ -10,6 +10,8 @@ dependencies {
     implementation(projects.common.zigAst)
 
     intellijPlatform {
+        bundledPlugin("com.intellij.nativeDebug")
+        bundledPlugin("com.intellij.clion")
         testFramework(TestFrameworkType.Platform)
     }
     testImplementation("junit:junit:4.13.2")

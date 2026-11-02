@@ -168,6 +168,32 @@ internal class ZigDeclarations private constructor(
         return owner
     }
 
+    fun namespacePath(token: Int): String? {
+        val names = ArrayList<String>()
+        var owner = enclosingNamespace(token)
+        while (owner >= 0) {
+            var nameToken = -1
+            var index = 0
+            while (index < declarations.size) {
+                var value = declarations[index + 4]
+                while (tag(value) == TokenTag.KEYWORD_PACKED || tag(value) == TokenTag.KEYWORD_EXTERN) value++
+                when (tag(value)) {
+                    TokenTag.KEYWORD_STRUCT, TokenTag.KEYWORD_UNION, TokenTag.KEYWORD_ENUM, TokenTag.KEYWORD_OPAQUE ->
+                        if (containerBrace(value) == owner) {
+                            nameToken = declarations[index]
+                            break
+                        }
+                    else -> Unit
+                }
+                index += DECLARATION_WORDS
+            }
+            if (nameToken < 0) return null
+            names.add(name(nameToken) ?: return null)
+            owner = enclosingNamespace(owner)
+        }
+        return names.asReversed().joinToString(".")
+    }
+
     fun containerBrace(token: Int): Int {
         var index = token + 1
         while (index < tokenCount) {

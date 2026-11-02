@@ -10,5 +10,5 @@ object ZonFileType : LanguageFileType(ZonLanguage) {
 
     override fun getDefaultExtension(): String = "zon"
 
-    override fun getIcon(): Icon? = null
+    override fun getIcon(): Icon = ZonIcons.file
 }

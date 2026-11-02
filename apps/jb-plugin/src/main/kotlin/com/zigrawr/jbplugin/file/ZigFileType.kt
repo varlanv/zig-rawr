@@ -10,5 +10,5 @@ object ZigFileType : LanguageFileType(ZigLanguage) {
 
     override fun getDefaultExtension(): String = "zig"
 
-    override fun getIcon(): Icon? = null
+    override fun getIcon(): Icon = ZigIcons.file
 }
