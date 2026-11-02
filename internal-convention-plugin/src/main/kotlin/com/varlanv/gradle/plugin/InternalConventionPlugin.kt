@@ -7,6 +7,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.tasks.Exec
+import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.gradle.plugins.ide.idea.IdeaPlugin
@@ -157,8 +158,10 @@ class InternalConventionPlugin : Plugin<Project> {
         }
 
         fun configureTests() {
-            tasks.withType(org.gradle.api.tasks.testing.Test::class.java).configureEach { test ->
-                test.useJUnitPlatform()
+            tasks.withType(Test::class.java).configureEach { test ->
+                test.useJUnitPlatform { platform ->
+                    platform.includeEngines("kotest")
+                }
                 test.testLogging { logging ->
                     logging.showStandardStreams = true
                     logging.showStackTraces = true
