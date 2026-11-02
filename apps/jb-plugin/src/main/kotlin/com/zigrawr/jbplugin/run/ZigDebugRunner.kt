@@ -1,29 +1,21 @@
 package com.zigrawr.jbplugin.run
 
 import com.intellij.execution.ExecutionException
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.configurations.ParametersList
-import com.intellij.execution.configurations.RunProfile
-import com.intellij.execution.configurations.RunProfileState
-import com.intellij.execution.configurations.RunnerSettings
+import com.intellij.execution.configurations.*
 import com.intellij.execution.executors.DefaultDebugExecutor
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.runners.AsyncProgramRunner
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.ui.RunContentDescriptor
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.io.FileUtil
-import com.intellij.xdebugger.XDebugProcess
-import com.intellij.xdebugger.XDebugProcessStarter
-import com.intellij.xdebugger.XDebugSession
-import com.intellij.xdebugger.XDebugSessionListener
-import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.xdebugger.*
 import com.jetbrains.cidr.cpp.toolchains.CPPEnvironment
 import com.jetbrains.cidr.cpp.toolchains.CPPToolchains
 import com.jetbrains.cidr.cpp.toolchains.createDriverConfiguration
@@ -60,7 +52,8 @@ class ZigDebugRunner : AsyncProgramRunner<RunnerSettings>() {
                 val temporary = Files.createTempDirectory("zigrawr-debug-")
                 directory = temporary
                 val executable = temporary.resolve(if (SystemInfo.isWindows) "program.exe" else "program")
-                val compile = ZigRunCommandLineState.createCommandLine(configuration, buildOnly = true, output = executable)
+                val compile =
+                    ZigRunCommandLineState.createCommandLine(configuration, buildOnly = true, output = executable)
                 compile.addParameter("-fno-strip")
                 indicator.text = "Compiling ${Path.of(configuration.filePath).fileName}"
                 val output = CapturingProcessHandler(compile).runProcessWithProgressIndicator(indicator)

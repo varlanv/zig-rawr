@@ -33,13 +33,15 @@ class ZigDebugSpec : IdeaHarness({
         runDebugFixture { fixture ->
             val directory = Files.createTempDirectory("zigrawr-debug-smoke-")
             val path = directory.resolve("debug-main.zig")
-            Files.writeString(path, """
+            Files.writeString(
+                path, """
                 const std = @import("std");
                 pub fn main() void {
                     const answer: u32 = 42;
                     std.debug.print("{d}\n", .{answer});
                 }
-            """.trimIndent())
+            """.trimIndent()
+            )
             val source = requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path))
             fixture.configureFromExistingVirtualFile(source)
             PlatformTestUtil.waitForFuture(fixture.project.service<ZigToolchainService>().refresh(), 15_000)!!
@@ -58,10 +60,20 @@ class ZigDebugSpec : IdeaHarness({
             breakpointType.canPutAt(source, line, fixture.project) shouldBe true
             ReadAction.computeBlocking<String, RuntimeException> {
                 service<CidrDebuggerLanguageSupportManager>().createEditor(fixture.project, configuration)
-                    .createDocument(fixture.project, XExpressionImpl.fromText("answer"), XSourcePositionImpl.create(source, line), EvaluationMode.EXPRESSION).text
+                    .createDocument(
+                        fixture.project,
+                        XExpressionImpl.fromText("answer"),
+                        XSourcePositionImpl.create(source, line),
+                        EvaluationMode.EXPRESSION
+                    ).text
             } shouldBe "answer"
             val breakpoint = ApplicationManager.getApplication().runWriteAction(Computable {
-                debugger.breakpointManager.addLineBreakpoint(breakpointType, source.url, line, breakpointType.createProperties())
+                debugger.breakpointManager.addLineBreakpoint(
+                    breakpointType,
+                    source.url,
+                    line,
+                    breakpointType.createProperties()
+                )
             })
             try {
                 runner.execute(ExecutionEnvironmentBuilder.create(executor, settings).build())
@@ -74,7 +86,11 @@ class ZigDebugSpec : IdeaHarness({
                 position.line shouldBe line
             } finally {
                 debugger.debugSessions.forEach { it.stop() }
-                PlatformTestUtil.waitWithEventsDispatching("The native debugger did not stop.", { debugger.debugSessions.isEmpty() }, 10)
+                PlatformTestUtil.waitWithEventsDispatching(
+                    "The native debugger did not stop.",
+                    { debugger.debugSessions.isEmpty() },
+                    10
+                )
                 WriteAction.run<RuntimeException> { debugger.breakpointManager.removeBreakpoint(breakpoint) }
                 FileUtil.delete(directory.toFile())
             }

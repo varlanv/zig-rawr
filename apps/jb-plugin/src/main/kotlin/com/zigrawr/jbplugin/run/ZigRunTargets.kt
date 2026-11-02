@@ -20,7 +20,13 @@ internal data class ZigRunTarget(
     val displayName: String,
 )
 
-private data class RunTargetsSnapshot(val stamp: Long, val fileName: String, val targets: List<ZigRunTarget>, val hasTests: Boolean)
+private data class RunTargetsSnapshot(
+    val stamp: Long,
+    val fileName: String,
+    val targets: List<ZigRunTarget>,
+    val hasTests: Boolean
+)
+
 private val targetsKey = Key.create<RunTargetsSnapshot>("zigrawr.run.targets")
 
 internal object ZigRunTargets {
@@ -32,11 +38,12 @@ internal object ZigRunTargets {
         val filter = if (kind == ZigRunKind.TEST_GROUP) name.trimEnd('.') + "." else name
         for (target in targets) {
             if (target.kind != ZigRunKind.TEST || !target.testName.contains(filter)) continue
-            val intended = if (kind == ZigRunKind.TEST_GROUP) target.testName.startsWith(filter) else target.testName == name
+            val intended =
+                if (kind == ZigRunKind.TEST_GROUP) target.testName.startsWith(filter) else target.testName == name
             if (!intended) {
                 throw RuntimeConfigurationError(
-                    "Zig's substring test filter cannot distinguish '$name' from '${target.testName}'. " +
-                        "Rename the test or group to make its name unique, then select it again from the gutter.",
+                    "Zig's `--test-filter [text]` currently cannot distinguish '$name' from '${target.testName}'. " +
+                        "As a workaround, rename the test or group to make its name unique, then select it again from the gutter.",
                 )
             }
         }
@@ -51,7 +58,8 @@ internal object ZigRunTargets {
         var selected: ZigRunTarget? = null
         for (target in targets) {
             if (offset >= target.start && offset < target.end &&
-                (selected == null || target.end - target.start < selected.end - selected.start)) selected = target
+                (selected == null || target.end - target.start < selected.end - selected.start)
+            ) selected = target
         }
         return selected
     }
@@ -76,7 +84,8 @@ internal object ZigRunTargets {
     }
 
     private fun get(file: PsiFile): RunTargetsSnapshot {
-        val stamp = PsiDocumentManager.getInstance(file.project).getDocument(file)?.modificationStamp ?: file.modificationStamp
+        val stamp =
+            PsiDocumentManager.getInstance(file.project).getDocument(file)?.modificationStamp ?: file.modificationStamp
         val cached = file.getUserData(targetsKey)
         if (cached != null && cached.stamp == stamp && cached.fileName == file.name) return cached
         val symbols = ZigDeclarations.get(file)
@@ -94,8 +103,12 @@ internal object ZigRunTargets {
             if (node and 255 == 0) ProgressManager.checkCanceled()
             if (tag == NodeTag.FN_DECL && symbols.name(main + 1) == "main" && symbols.enclosingNamespace(main) < 0) {
                 val span = symbols.ast.nodePositions(node)
-                targets.add(ZigRunTarget(ZigRunKind.MAIN, symbols.ast.tokenPositions(main + 1).start,
-                    span.start, span.end, "", "${file.name}: main"))
+                targets.add(
+                    ZigRunTarget(
+                        ZigRunKind.MAIN, symbols.ast.tokenPositions(main + 1).start,
+                        span.start, span.end, "", "${file.name}: main"
+                    )
+                )
             }
             if (tag == NodeTag.TEST_DECL) {
                 val path = namespace(main) ?: return@forEachNode
@@ -110,8 +123,12 @@ internal object ZigRunTargets {
                     }
                 }
                 val span = symbols.ast.nodePositions(node)
-                tests.add(ZigRunTarget(ZigRunKind.TEST, symbols.ast.tokenPositions(main).start,
-                    span.start, span.end, "$prefix.$name", "${file.name}: $name"))
+                tests.add(
+                    ZigRunTarget(
+                        ZigRunKind.TEST, symbols.ast.tokenPositions(main).start,
+                        span.start, span.end, "$prefix.$name", "${file.name}: $name"
+                    )
+                )
             }
         }
         tests.sortBy { it.offset }
@@ -119,7 +136,8 @@ internal object ZigRunTargets {
         symbols.ast.forEachNode { node, tag, main, _, _ ->
             if (node and 255 == 0) ProgressManager.checkCanceled()
             if (tag != NodeTag.SIMPLE_VAR_DECL && tag != NodeTag.ALIGNED_VAR_DECL &&
-                tag != NodeTag.GLOBAL_VAR_DECL && tag != NodeTag.LOCAL_VAR_DECL) return@forEachNode
+                tag != NodeTag.GLOBAL_VAR_DECL && tag != NodeTag.LOCAL_VAR_DECL
+            ) return@forEachNode
             val name = symbols.name(main + 1) ?: return@forEachNode
             val declaration = symbols.find(name, main + 1)
             if (declaration < 0) return@forEachNode
@@ -141,10 +159,19 @@ internal object ZigRunTargets {
             }
             if (low >= tests.size || tests[low].offset >= span.end) return@forEachNode
             val path = namespace(brace + 1) ?: return@forEachNode
-            targets.add(ZigRunTarget(ZigRunKind.TEST_GROUP, symbols.ast.tokenPositions(main + 1).start,
-                span.start, span.end, "$rootName.$path", "${file.name}: $path tests"))
+            targets.add(
+                ZigRunTarget(
+                    ZigRunKind.TEST_GROUP, symbols.ast.tokenPositions(main + 1).start,
+                    span.start, span.end, "$rootName.$path", "${file.name}: $path tests"
+                )
+            )
         }
         targets.sortBy { it.offset }
-        return RunTargetsSnapshot(stamp, file.name, targets, tests.isNotEmpty()).also { file.putUserData(targetsKey, it) }
+        return RunTargetsSnapshot(stamp, file.name, targets, tests.isNotEmpty()).also {
+            file.putUserData(
+                targetsKey,
+                it
+            )
+        }
     }
 }

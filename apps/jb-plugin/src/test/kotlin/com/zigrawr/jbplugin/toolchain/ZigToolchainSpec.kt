@@ -31,7 +31,8 @@ class ZigToolchainSpec : IdeaHarness({
             service.currentInfo shouldBe info
             PlatformTestUtil.waitForFuture(service.inspect("zig"), 15_000).stdDirectory shouldBe info.stdDirectory
 
-            fixture.configureByText("standard-library.zig", """
+            fixture.configureByText(
+                "standard-library.zig", """
                 const std = @import("std");
                 const bytes = std.mem;
                 fn main() void {
@@ -39,7 +40,8 @@ class ZigToolchainSpec : IdeaHarness({
                     _ = bytes.eql(u8, "a", "b");
                     _ = @import("std").mem.eql(u8, "c", "d");
                 }
-            """.trimIndent())
+            """.trimIndent()
+            )
             val root = targets(fixture, "@import(\"std\")", "std").single()
             root.containingFile.virtualFile.toNioPath().toRealPath() shouldBe
                 standardLibrary.resolve("std.zig").toRealPath()
@@ -63,11 +65,13 @@ class ZigToolchainSpec : IdeaHarness({
             settings.executable = ""
             val active = PlatformTestUtil.waitForFuture(service.refresh(), 15_000)!!
             fixture.addFileToProject("helper.zig", "pub fn local() void {}")
-            val main = fixture.addFileToProject("main.zig", """
+            val main = fixture.addFileToProject(
+                "main.zig", """
                 const std = @import("std");
                 const helper = @import("helper.zig");
                 fn main() void { _ = std.mem.eql(u8, "", ""); helper.local(); }
-            """.trimIndent())
+            """.trimIndent()
+            )
             fixture.configureFromExistingVirtualFile(main.virtualFile)
             targets(fixture, "std.mem.eql(", "eql").single().text shouldBe "eql"
             val invalid = Path.of(fixture.tempDirFixture.tempDirPath, "missing-zig").toString()

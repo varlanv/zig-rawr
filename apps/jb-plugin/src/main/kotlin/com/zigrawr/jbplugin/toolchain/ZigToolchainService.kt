@@ -87,7 +87,8 @@ class ZigToolchainService(private val project: Project) : Disposable {
             var failure = error?.cause ?: error
             if (info != null && failure == null && !project.isDisposed && request == generation.get()) {
                 try {
-                    root = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(info.stdDirectory, "std.zig"))?.parent
+                    root = LocalFileSystem.getInstance()
+                        .refreshAndFindFileByNioFile(Path.of(info.stdDirectory, "std.zig"))?.parent
                     check(root != null) { "The Zig standard library is not available in the IDE filesystem." }
                     builtins = runCatching { ZigBuiltinCatalog.load(info) }.getOrNull()
                 } catch (exception: Exception) {
@@ -100,15 +101,19 @@ class ZigToolchainService(private val project: Project) : Disposable {
             ApplicationManager.getApplication().invokeLater({
                 try {
                     if (project.isDisposed || request != generation.get() ||
-                        selection != project.service<ZigToolchainSettings>().executable.trim()) {
+                        selection != project.service<ZigToolchainSettings>().executable.trim()
+                    ) {
                         completed.complete(null)
                         return@invokeLater
                     }
                     val previous = snapshot
                     val ready = if (resolvedRoot == null || failure != null) null else info
-                    val libraries = if (ready == null) emptyList() else listOf(ZigStandardLibrary(resolvedRoot!!, ready.version))
-                    snapshot = ToolchainSnapshot(selection, ready, resolvedRoot, libraries,
-                        if (ready == null) null else resolvedBuiltins, message)
+                    val libraries =
+                        if (ready == null) emptyList() else listOf(ZigStandardLibrary(resolvedRoot!!, ready.version))
+                    snapshot = ToolchainSnapshot(
+                        selection, ready, resolvedRoot, libraries,
+                        if (ready == null) null else resolvedBuiltins, message
+                    )
                     WriteAction.run<RuntimeException> {
                         AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(
                             project, "Zig standard library", previous.libraries.flatMap { it.sourceRoots },
@@ -128,7 +133,8 @@ class ZigToolchainService(private val project: Project) : Disposable {
     private fun currentSnapshot(): ToolchainSnapshot? {
         val current = snapshot
         return if (current.selection == project.service<ZigToolchainSettings>().executable.trim() &&
-            (current.info == null || current.root?.isValid == true)) current else null
+            (current.info == null || current.root?.isValid == true)
+        ) current else null
     }
 
     private fun probe(selection: String): ZigToolchainInfo {
@@ -163,10 +169,11 @@ class ZigToolchainService(private val project: Project) : Disposable {
             if (depth != 1 || tokens.tokenTag(index + 2) != TokenTag.STRING_LITERAL) continue
             val tag = tokens.tokenTag(index)
             if (!(tag == TokenTag.IDENTIFIER && tokens.tokenTag(index + 1) == TokenTag.EQUAL) &&
-                !(tag == TokenTag.STRING_LITERAL && tokens.tokenTag(index + 1) == TokenTag.COLON)) continue
+                !(tag == TokenTag.STRING_LITERAL && tokens.tokenTag(index + 1) == TokenTag.COLON)
+            ) continue
             val keySpan = tokens.tokenPositions(index)
             val key = if (tag == TokenTag.IDENTIFIER) source.substring(keySpan.start, keySpan.end)
-                else decodeZigStringLiteral(source, keySpan.start, keySpan.end)
+            else decodeZigStringLiteral(source, keySpan.start, keySpan.end)
             if (key != "std_dir" && key != "lib_dir" && key != "version" && key != "zig_exe") continue
             val valueSpan = tokens.tokenPositions(index + 2)
             val value = decodeZigStringLiteral(source, valueSpan.start, valueSpan.end)
@@ -180,8 +187,9 @@ class ZigToolchainService(private val project: Project) : Disposable {
         }
         check(!version.isNullOrBlank()) { "Zig did not report its version." }
         val directory = stdDirectory?.let(Path::of) ?: libDirectory?.let { Path.of(it, "std") }
-            ?: error("Zig did not report its standard library directory.")
-        val resolved = if (directory.isAbsolute) directory else (command.workDirectory?.toPath() ?: Path.of(".")).resolve(directory)
+        ?: error("Zig did not report its standard library directory.")
+        val resolved = if (directory.isAbsolute) directory else (command.workDirectory?.toPath()
+            ?: Path.of(".")).resolve(directory)
         check(Files.isRegularFile(resolved.resolve("std.zig"))) { "Zig standard library not found: $resolved" }
         return ZigToolchainInfo(reportedExecutable ?: executable.toString(), version, resolved.toRealPath().toString())
     }

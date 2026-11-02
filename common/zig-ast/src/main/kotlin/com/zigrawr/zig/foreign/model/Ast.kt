@@ -142,7 +142,8 @@ value class Ast(@PublishedApi internal val bytes: MutBytes) {
         val entries = NodeTag.entries
         while (index < count) {
             val tag = entries[bytes[tagsOffset + index * tagSize].toInt() and 0xFF]
-            val positions = TokenPositions(PackedLong2(bytes.getPackedLong(positionsOffset + index * tokenPositionsSize)))
+            val positions =
+                TokenPositions(PackedLong2(bytes.getPackedLong(positionsOffset + index * tokenPositionsSize)))
             block(index, tag, positions)
             index++
         }

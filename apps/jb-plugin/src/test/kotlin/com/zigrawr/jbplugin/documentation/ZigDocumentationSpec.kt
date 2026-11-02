@@ -16,7 +16,8 @@ import io.kotest.matchers.string.shouldNotContain
 class ZigDocumentationSpec : IdeaHarness({
     should("show declaration signatures and escaped documentation at declarations and usages") {
         runSelectionFixture({ fixture ->
-            fixture.configureByText("documentation.zig", """
+            fixture.configureByText(
+                "documentation.zig", """
                 /// Adds <values> & returns a result.
                 pub fn add(a: u32, b: u32) u32 { const implementation_detail = a + b; return implementation_detail; }
                 /// Fixed <limit>.
@@ -27,7 +28,8 @@ class ZigDocumentationSpec : IdeaHarness({
 
                 const plain = 2;
                 fn caller() void { _ = add(limit, plain); _ = Box; _ = missing; }
-            """.trimIndent())
+            """.trimIndent()
+            )
 
             val function = html(targets(fixture, "fn add(", "add").single())
             function shouldContain "pub fn add(a: u32, b: u32) u32"
@@ -52,24 +54,29 @@ class ZigDocumentationSpec : IdeaHarness({
 
     should("resolve imported documentation and refresh a target pointer after library edits") {
         runSelectionFixture({ fixture ->
-            val library = fixture.addFileToProject("lib/math.zig", """
+            val library = fixture.addFileToProject(
+                "lib/math.zig", """
                 /// Adds one.
                 pub fn add(value: u32) u32 { return value + 1; }
-            """.trimIndent())
-            val main = fixture.addFileToProject("main.zig", """
+            """.trimIndent()
+            )
+            val main = fixture.addFileToProject(
+                "main.zig", """
                 const math = @import("lib/math.zig");
                 const alias = math;
                 fn caller() void { _ = alias.add(2); _ = @import("lib/math.zig").add(3); }
-            """.trimIndent())
+            """.trimIndent()
+            )
             fixture.configureFromExistingVirtualFile(main.virtualFile)
             val selected = targets(fixture, "alias.add(2)", "add").single()
             val before = html(selected)
             before shouldContain "pub fn add(value: u32) u32"
             before shouldContain "Adds one."
             html(targets(fixture, ").add(3)", "add").single()) shouldBe before
-            val pointer = ReadAction.computeBlocking<com.intellij.model.Pointer<out DocumentationTarget>, RuntimeException> {
-                selected.createPointer()
-            }
+            val pointer =
+                ReadAction.computeBlocking<com.intellij.model.Pointer<out DocumentationTarget>, RuntimeException> {
+                    selected.createPointer()
+                }
             val document = PsiDocumentManager.getInstance(fixture.project).getDocument(library)!!
             WriteCommandAction.runWriteCommandAction(fixture.project) {
                 document.insertString(0, "const header = 1;\n")

@@ -19,7 +19,8 @@ class ZigDeclarationHandlerSpec : IdeaHarness({
                 for (position in 0..name.length) {
                     val offset = start + position
                     fixture.editor.caretModel.moveToOffset(offset)
-                    val target = GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, offset).single()
+                    val target =
+                        GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, offset).single()
                     target.text shouldBe name
                     target.textOffset shouldBe source.indexOf(name)
                 }

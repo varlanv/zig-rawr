@@ -1,14 +1,7 @@
 package com.zigrawr.jbplugin.run
 
 import com.intellij.execution.Executor
-import com.intellij.execution.configurations.ConfigurationFactory
-import com.intellij.execution.configurations.ConfigurationType
-import com.intellij.execution.configurations.ConfigurationTypeUtil
-import com.intellij.execution.configurations.LocatableConfigurationBase
-import com.intellij.execution.configurations.LocatableRunConfigurationOptions
-import com.intellij.execution.configurations.RunConfiguration
-import com.intellij.execution.configurations.RunProfileState
-import com.intellij.execution.configurations.RuntimeConfigurationError
+import com.intellij.execution.configurations.*
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ReadAction
@@ -52,27 +45,39 @@ class ZigRunConfiguration(
 
     var kind: ZigRunKind
         get() = ZigRunKind.entries.firstOrNull { it.name == options.targetKind } ?: ZigRunKind.MAIN
-        set(value) { options.targetKind = value.name }
+        set(value) {
+            options.targetKind = value.name
+        }
 
     var filePath: String
         get() = options.filePath.orEmpty()
-        set(value) { options.filePath = value }
+        set(value) {
+            options.filePath = value
+        }
 
     var testName: String
         get() = options.testName.orEmpty()
-        set(value) { options.testName = value }
+        set(value) {
+            options.testName = value
+        }
 
     var compilerArguments: String
         get() = options.compilerArguments.orEmpty()
-        set(value) { options.compilerArguments = value }
+        set(value) {
+            options.compilerArguments = value
+        }
 
     var programArguments: String
         get() = options.programArguments.orEmpty()
-        set(value) { options.programArguments = value }
+        set(value) {
+            options.programArguments = value
+        }
 
     var workingDirectory: String
         get() = options.workingDirectory.orEmpty()
-        set(value) { options.workingDirectory = value }
+        set(value) {
+            options.workingDirectory = value
+        }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> = ZigRunConfigurationEditor(project)
 

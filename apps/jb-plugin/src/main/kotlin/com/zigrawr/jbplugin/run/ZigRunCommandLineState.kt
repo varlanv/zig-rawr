@@ -2,11 +2,7 @@ package com.zigrawr.jbplugin.run
 
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.ExecutionManager
-import com.intellij.execution.configurations.CommandLineState
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.configurations.ParametersList
-import com.intellij.execution.configurations.RunProfile
-import com.intellij.execution.configurations.RunnerSettings
+import com.intellij.execution.configurations.*
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.filters.RegexpFilter
 import com.intellij.execution.process.KillableColoredProcessHandler
@@ -17,10 +13,11 @@ import com.intellij.execution.runners.ProgramRunner
 import com.intellij.execution.runners.executeState
 import com.intellij.openapi.components.service
 import com.zigrawr.jbplugin.toolchain.ZigToolchainService
-import java.nio.file.Path
 import org.jetbrains.concurrency.resolvedPromise
+import java.nio.file.Path
 
-class ZigRunCommandLineState(environment: ExecutionEnvironment, private val configuration: ZigRunConfiguration) : CommandLineState(environment) {
+class ZigRunCommandLineState(environment: ExecutionEnvironment, private val configuration: ZigRunConfiguration) :
+    CommandLineState(environment) {
     init {
         addConsoleFilters(RegexpFilter(configuration.project, "\$FILE_PATH\$:\$LINE\$:\$COLUMN\$:.*"))
     }
@@ -33,18 +30,24 @@ class ZigRunCommandLineState(environment: ExecutionEnvironment, private val conf
     }
 
     companion object {
-        fun createCommandLine(configuration: ZigRunConfiguration, buildOnly: Boolean = false, output: Path? = null): GeneralCommandLine {
+        fun createCommandLine(
+            configuration: ZigRunConfiguration,
+            buildOnly: Boolean = false,
+            output: Path? = null
+        ): GeneralCommandLine {
             configuration.checkConfiguration()
             val toolchain = configuration.project.service<ZigToolchainService>().currentInfo
                 ?: throw ExecutionException("Select and check a Zig toolchain in Settings | Languages & Frameworks | Zig.")
             val sourcePath = Path.of(configuration.filePath)
             val projectPath = Path.of(configuration.project.basePath ?: ".")
-            val source = (if (sourcePath.isAbsolute) sourcePath else projectPath.resolve(sourcePath)).toAbsolutePath().normalize()
+            val source = (if (sourcePath.isAbsolute) sourcePath else projectPath.resolve(sourcePath)).toAbsolutePath()
+                .normalize()
             val workingDirectory = if (configuration.workingDirectory.isBlank()) source.parent else {
                 val path = Path.of(configuration.workingDirectory)
                 if (path.isAbsolute) path else projectPath.resolve(path)
             }
-            val command = GeneralCommandLine(toolchain.executable).withCharset(Charsets.UTF_8).withWorkingDirectory(workingDirectory)
+            val command = GeneralCommandLine(toolchain.executable).withCharset(Charsets.UTF_8)
+                .withWorkingDirectory(workingDirectory)
             command.addParameter(if (configuration.kind == ZigRunKind.MAIN) if (buildOnly) "build-exe" else "run" else "test")
             command.addParameter(source.toString())
             command.addParameters(ParametersList.parse(configuration.compilerArguments).toList())
@@ -55,7 +58,7 @@ class ZigRunCommandLineState(environment: ExecutionEnvironment, private val conf
             }
             if (configuration.kind == ZigRunKind.TEST || configuration.kind == ZigRunKind.TEST_GROUP) {
                 val filter = if (configuration.kind == ZigRunKind.TEST_GROUP) configuration.testName.trimEnd('.') + "."
-                    else configuration.testName
+                else configuration.testName
                 command.addParameters("--test-filter", filter)
             }
             if (!buildOnly && configuration.kind == ZigRunKind.MAIN && configuration.programArguments.isNotBlank()) {

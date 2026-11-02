@@ -9,14 +9,17 @@ import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.VirtualFile
 import javax.swing.Icon
 
-internal class ZigStandardLibrary(private val root: VirtualFile, private val version: String) : SyntheticLibrary(), ItemPresentation {
+internal class ZigStandardLibrary(private val root: VirtualFile, private val version: String) : SyntheticLibrary(),
+    ItemPresentation {
     private val roots = listOf(root)
 
     override fun getSourceRoots(): Collection<VirtualFile> = roots
     override fun getPresentableText(): String = "Zig $version standard library"
     override fun getLocationString(): String = root.path
     override fun getIcon(unused: Boolean): Icon? = null
-    override fun equals(other: Any?): Boolean = other is ZigStandardLibrary && root == other.root && version == other.version
+    override fun equals(other: Any?): Boolean =
+        other is ZigStandardLibrary && root == other.root && version == other.version
+
     override fun hashCode(): Int = 31 * root.hashCode() + version.hashCode()
 }
 

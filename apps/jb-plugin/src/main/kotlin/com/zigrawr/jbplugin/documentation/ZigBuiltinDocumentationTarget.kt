@@ -37,7 +37,10 @@ internal class ZigBuiltinDocumentationTarget(private val builtin: ZigBuiltinPsiE
             append("<p>Zig ")
             append(StringUtil.escapeXmlEntities(entry.version))
             append(" compiler builtin.</p>")
-            append(entry.html ?: "<p>The language reference is not bundled with this toolchain. Open the documentation link for details.</p>")
+            append(
+                entry.html
+                    ?: "<p>The language reference is not bundled with this toolchain. Open the documentation link for details.</p>"
+            )
             append(DocumentationMarkup.CONTENT_END)
         }
         return DocumentationResult.documentation(html).externalUrl(entry.documentationUrl)

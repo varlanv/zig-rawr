@@ -9,8 +9,10 @@ kotlinVersion = "2.4.21"
 koverVersion = "0.9.11"
 shadowPluginVersion = "9.6.1"
 versionCatalogPluginVersion = "1.1.2"
+junit4Version = "4.13.2"
 
 [libraries]
+junit4 = { module = "junit:junit", version.ref = "junit4Version" }
 intellij-platform-gradle = { module = "org.jetbrains.intellij.platform:intellij-platform-gradle-plugin", version.ref = "intellijPlatformVersion" }
 kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlinVersion" }
 kotlin-gradle-main = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlinVersion" }

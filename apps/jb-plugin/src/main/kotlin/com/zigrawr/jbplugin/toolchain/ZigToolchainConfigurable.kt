@@ -20,7 +20,10 @@ import javax.swing.JPanel
 class ZigToolchainConfigurable(private val project: Project) : SearchableConfigurable {
     private class Form(project: Project) {
         val executable = TextFieldWithBrowseButton().apply {
-            addBrowseFolderListener(project, FileChooserDescriptorFactory.singleFile().withTitle("Select Zig Executable"))
+            addBrowseFolderListener(
+                project,
+                FileChooserDescriptorFactory.singleFile().withTitle("Select Zig Executable")
+            )
         }
         val check = JButton("Check")
         val reload = JButton("Reload")
@@ -29,18 +32,20 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
         val version = JBLabel()
         val standardLibrary = JBLabel().setCopyable(true)
         val panel = JPanel(BorderLayout()).apply {
-            add(FormBuilder.createFormBuilder()
-                .addLabeledComponent("Zig executable:", executable)
-                .addTooltip("Leave empty to use Zig from PATH.")
-                .addComponentToRightColumn(JPanel(FlowLayout(FlowLayout.LEADING, 4, 0)).apply {
-                    add(check)
-                    add(reload)
-                })
-                .addLabeledComponent("Status:", status)
-                .addLabeledComponent("Detected executable:", detectedExecutable)
-                .addLabeledComponent("Version:", version)
-                .addLabeledComponent("Standard library:", standardLibrary)
-                .panel, BorderLayout.NORTH)
+            add(
+                FormBuilder.createFormBuilder()
+                    .addLabeledComponent("Zig executable:", executable)
+                    .addTooltip("Leave empty to use Zig from PATH.")
+                    .addComponentToRightColumn(JPanel(FlowLayout(FlowLayout.LEADING, 4, 0)).apply {
+                        add(check)
+                        add(reload)
+                    })
+                    .addLabeledComponent("Status:", status)
+                    .addLabeledComponent("Detected executable:", detectedExecutable)
+                    .addLabeledComponent("Version:", version)
+                    .addLabeledComponent("Standard library:", standardLibrary)
+                    .panel, BorderLayout.NORTH
+            )
         }
     }
 
@@ -114,7 +119,11 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
                 } else if (error != null) {
                     display(current, null, error.cause?.message ?: error.message ?: "Unable to inspect Zig.")
                 } else {
-                    display(current, info, if (info == null) project.service<ZigToolchainService>().statusMessage else "Ready")
+                    display(
+                        current,
+                        info,
+                        if (info == null) project.service<ZigToolchainService>().statusMessage else "Ready"
+                    )
                 }
             }, modality)
         }

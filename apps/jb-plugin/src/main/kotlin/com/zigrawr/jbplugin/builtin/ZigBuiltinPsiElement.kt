@@ -21,7 +21,9 @@ internal class ZigBuiltinPsiElement private constructor(
     override fun getName(): String = builtinName
     override fun getText(): String = builtinName
     override fun getTextOffset(): Int = source.textOffset
-    override fun getLocationString(): String = "Zig ${project.service<ZigToolchainService>().currentInfo?.version ?: ""} builtin"
+    override fun getLocationString(): String =
+        "Zig ${project.service<ZigToolchainService>().currentInfo?.version ?: ""} builtin"
+
     override fun isValid(): Boolean = source.isValid && source.text == builtinName && entry() != null
     override fun canNavigate(): Boolean = isValid
     override fun canNavigateToSource(): Boolean = false

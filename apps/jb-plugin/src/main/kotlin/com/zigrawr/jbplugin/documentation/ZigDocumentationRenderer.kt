@@ -36,6 +36,7 @@ internal object ZigDocumentationRenderer {
                             suffix = " … };"
                         }
                     }
+
                     else -> {
                         val next = symbols.tokenAt(end - 1) + 1
                         if (symbols.tag(next) == TokenTag.SEMICOLON) end = symbols.ast.tokenPositions(next).end
@@ -47,7 +48,8 @@ internal object ZigDocumentationRenderer {
             start = symbols.ast.tokenPositions(token).start
             var index = token + 2
             while (index < symbols.ast.tokenCount() && symbols.tag(index) != TokenTag.COMMA &&
-                symbols.tag(index) != TokenTag.R_PAREN && symbols.tag(index) != TokenTag.EOF) {
+                symbols.tag(index) != TokenTag.R_PAREN && symbols.tag(index) != TokenTag.EOF
+            ) {
                 if (index and 255 == 0) ProgressManager.checkCanceled()
                 index = if (symbols.matching[index] > index) symbols.matching[index] + 1 else index + 1
             }
@@ -74,8 +76,10 @@ internal object ZigDocumentationRenderer {
                 NodeTag.GLOBAL_VAR_DECL, NodeTag.LOCAL_VAR_DECL, NodeTag.SIMPLE_VAR_DECL, NodeTag.ALIGNED_VAR_DECL,
                 NodeTag.FN_PROTO_SIMPLE, NodeTag.FN_PROTO_MULTI, NodeTag.FN_PROTO_ONE, NodeTag.FN_PROTO ->
                     if (main + 1 == token) return node
+
                 NodeTag.CONTAINER_FIELD, NodeTag.CONTAINER_FIELD_INIT, NodeTag.CONTAINER_FIELD_ALIGN ->
                     if (main == token) return node
+
                 else -> Unit
             }
         }

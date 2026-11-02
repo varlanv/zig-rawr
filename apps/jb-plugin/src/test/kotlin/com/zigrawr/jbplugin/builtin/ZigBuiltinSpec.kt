@@ -27,7 +27,8 @@ import java.nio.file.Path
 class ZigBuiltinSpec : IdeaHarness({
     should("document and navigate selected-toolchain builtins and highlight matching builtin tokens") {
         runSelectionFixture({ fixture ->
-            val info = PlatformTestUtil.waitForFuture(fixture.project.service<ZigToolchainService>().refresh(), 15_000)!!
+            val info =
+                PlatformTestUtil.waitForFuture(fixture.project.service<ZigToolchainService>().refresh(), 15_000)!!
             val source = """
                 const intCast = 4;
                 fn run(value: u32) void {
@@ -43,7 +44,8 @@ class ZigBuiltinSpec : IdeaHarness({
             """.trimIndent()
             fixture.configureByText("builtins.zig", source)
             val offset = source.indexOf("@intCast(value)")
-            val expected = listOf(TextRange.from(offset, 8), TextRange.from(source.indexOf("@intCast(value)", offset + 1), 8))
+            val expected =
+                listOf(TextRange.from(offset, 8), TextRange.from(source.indexOf("@intCast(value)", offset + 1), 8))
             highlightedRanges(fixture, offset) shouldBe expected
             highlightedRanges(fixture, offset + 3) shouldBe expected
             val target = documentationTargets(fixture, offset).single()
@@ -54,11 +56,18 @@ class ZigBuiltinSpec : IdeaHarness({
             html shouldNotContain "Table of Contents"
             ReadAction.computeBlocking<String, RuntimeException> { target.computePresentation().locationText.orEmpty() } shouldContain info.version
             fixture.editor.caretModel.moveToOffset(offset)
-            val navigation = GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, offset).single() as ZigBuiltinPsiElement
+            val navigation = GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, offset)
+                .single() as ZigBuiltinPsiElement
             navigation.name shouldBe "@intCast"
             navigation.documentationUrl.endsWith("#intCast") shouldBe true
-            navigation.documentationUrl shouldContain Path.of(info.executable).parent.resolve("doc/langref.html").toUri().toString()
-            documentation(documentationTargets(fixture, source.indexOf("@TypeOf(value)") + 2).single()) shouldContain "@TypeOf"
+            navigation.documentationUrl shouldContain Path.of(info.executable).parent.resolve("doc/langref.html")
+                .toUri().toString()
+            documentation(
+                documentationTargets(
+                    fixture,
+                    source.indexOf("@TypeOf(value)") + 2
+                ).single()
+            ) shouldContain "@TypeOf"
             val unknown = source.indexOf("@notAnExistingBuiltin")
             documentationTargets(fixture, unknown).size shouldBe 0
             fixture.editor.caretModel.moveToOffset(unknown)
@@ -73,13 +82,20 @@ class ZigBuiltinSpec : IdeaHarness({
             fixture.configureByText("builtin-edits.zig", "const value: u8 = @intCast(12);")
             val target = documentationTargets(fixture, fixture.editor.document.text.indexOf("@intCast")).single()
             val before = documentation(target)
-            val pointer = ReadAction.computeBlocking<com.intellij.model.Pointer<out DocumentationTarget>, RuntimeException> { target.createPointer() }
-            WriteCommandAction.runWriteCommandAction(fixture.project) { fixture.editor.document.insertString(0, "const header = 1;\n") }
+            val pointer =
+                ReadAction.computeBlocking<com.intellij.model.Pointer<out DocumentationTarget>, RuntimeException> { target.createPointer() }
+            WriteCommandAction.runWriteCommandAction(fixture.project) {
+                fixture.editor.document.insertString(
+                    0,
+                    "const header = 1;\n"
+                )
+            }
             PsiDocumentManager.getInstance(fixture.project).commitAllDocuments()
             documentation(pointer.dereference()!!) shouldBe before
             val offset = fixture.editor.document.text.indexOf("@intCast")
             documentation(documentationTargets(fixture, offset + 3).single()) shouldBe before
-            fixture.project.service<ZigToolchainSettings>().executable = Path.of(fixture.tempDirFixture.tempDirPath, "missing-zig").toString()
+            fixture.project.service<ZigToolchainSettings>().executable =
+                Path.of(fixture.tempDirFixture.tempDirPath, "missing-zig").toString()
             PlatformTestUtil.waitForFuture(service.refresh(), 15_000) shouldBe null
             documentationTargets(fixture, offset).size shouldBe 0
             fixture.editor.caretModel.moveToOffset(offset)
@@ -91,7 +107,8 @@ class ZigBuiltinSpec : IdeaHarness({
 
 private fun documentationTargets(fixture: CodeInsightTestFixture, offset: Int): List<DocumentationTarget> =
     ReadAction.computeBlocking<List<DocumentationTarget>, RuntimeException> {
-        DocumentationTargetProvider.EP_NAME.extensionList.single { it is ZigDocumentationProvider }.documentationTargets(fixture.file, offset)
+        DocumentationTargetProvider.EP_NAME.extensionList.single { it is ZigDocumentationProvider }
+            .documentationTargets(fixture.file, offset)
     }
 
 private fun documentation(target: DocumentationTarget): String = ReadAction.computeBlocking<String, RuntimeException> {

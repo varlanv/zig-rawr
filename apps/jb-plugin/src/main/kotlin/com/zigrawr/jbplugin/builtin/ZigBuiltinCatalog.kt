@@ -11,7 +11,7 @@ import java.io.IOException
 import java.io.StringReader
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Arrays
+import java.util.*
 import java.util.concurrent.atomic.AtomicReferenceArray
 import javax.swing.text.MutableAttributeSet
 import javax.swing.text.html.HTML
@@ -77,7 +77,14 @@ internal class ZigBuiltinCatalog private constructor(
                     }
                 }
             }
-            return ZigBuiltinCatalog(info.version, sorted, text, starts, ends, reference?.first?.toUri()?.toASCIIString())
+            return ZigBuiltinCatalog(
+                info.version,
+                sorted,
+                text,
+                starts,
+                ends,
+                reference?.first?.toUri()?.toASCIIString()
+            )
         }
 
         private fun readNames(path: Path): ArrayList<String> {
@@ -143,7 +150,11 @@ internal class ZigBuiltinCatalog private constructor(
                 val nameEnd = source.indexOf('"', nameStart)
                 if (nameEnd < 0 || nameEnd > headerTagEnd) continue
                 val name = "@" + source.substring(nameStart, nameEnd)
-                if (!isBuiltinName(name) || source.indexOf(name, headerTagEnd) !in headerTagEnd until headerEnd) continue
+                if (!isBuiltinName(name) || source.indexOf(
+                        name,
+                        headerTagEnd
+                    ) !in headerTagEnd until headerEnd
+                ) continue
                 val nextBuiltin = source.indexOf("<h3", cursor)
                 val end = minOf(if (nextBuiltin < 0) source.length else nextBuiltin, chapterEnd)
                 action(name, cursor, end)
@@ -173,7 +184,8 @@ internal class ZigBuiltinCatalog private constructor(
                             href.startsWith("https://") || href.startsWith("http://") -> href
                             else -> null
                         }
-                        if (safe != null) result.append(" href=\"").append(StringUtil.escapeXmlEntities(safe)).append('"')
+                        if (safe != null) result.append(" href=\"").append(StringUtil.escapeXmlEntities(safe))
+                            .append('"')
                     }
                     result.append('>')
                 }
@@ -196,7 +208,11 @@ internal class ZigBuiltinCatalog private constructor(
                     if (suppressed == 0) result.append(StringUtil.escapeXmlEntities(String(data)))
                 }
             }
-            ParserDelegator().parse(StringReader(source.substring(start, minOf(end, start + MAX_SECTION_CHARS))), callback, true)
+            ParserDelegator().parse(
+                StringReader(source.substring(start, minOf(end, start + MAX_SECTION_CHARS))),
+                callback,
+                true
+            )
             return result.toString()
         }
 
@@ -205,6 +221,7 @@ internal class ZigBuiltinCatalog private constructor(
             HTML.Tag.EM, HTML.Tag.STRONG, HTML.Tag.B, HTML.Tag.I, HTML.Tag.A, HTML.Tag.TABLE, HTML.Tag.TR,
             HTML.Tag.TD, HTML.Tag.TH, HTML.Tag.BLOCKQUOTE, HTML.Tag.DL, HTML.Tag.DT, HTML.Tag.DD,
             HTML.Tag.H4, HTML.Tag.H5, HTML.Tag.H6, HTML.Tag.SAMP, HTML.Tag.KBD, HTML.Tag.CITE -> true
+
             else -> false
         }
     }

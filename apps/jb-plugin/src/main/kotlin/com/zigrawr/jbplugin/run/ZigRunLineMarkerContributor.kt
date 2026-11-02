@@ -16,7 +16,7 @@ class ZigRunLineMarkerContributor : RunLineMarkerContributor(), DumbAware {
         if (type != ZigTokenTypes.forTag(TokenTag.IDENTIFIER) && type != ZigTokenTypes.forTag(TokenTag.KEYWORD_TEST)) return null
         val target = ZigRunTargets.markerAt(element) ?: return null
         val actions = if (ZigRunTargets.fileTests(element.containingFile) == null) ExecutorAction.getActions(0)
-            else ExecutorAction.getActions(0) + ExecutorAction.getActions(1)
+        else ExecutorAction.getActions(0) + ExecutorAction.getActions(1)
         return Info(AllIcons.Actions.Execute, actions) { target.displayName }
     }
 }

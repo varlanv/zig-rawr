@@ -30,6 +30,7 @@ internal fun decodeZigStringLiteral(source: CharSequence, startOffset: Int, endO
                 }
                 result.append(String(bytes, 0, count, Charsets.UTF_8))
             }
+
             'u' -> {
                 if (index >= end || source[index++] != '{') return null
                 var codepoint = 0
@@ -40,12 +41,13 @@ internal fun decodeZigStringLiteral(source: CharSequence, startOffset: Int, endO
                     codepoint = (codepoint shl 4) or digit
                 }
                 if (digits == 0 || index >= end || source[index++] != '}' ||
-                    codepoint > 0x10ffff || codepoint in 0xd800..0xdfff) return null
+                    codepoint > 0x10ffff || codepoint in 0xd800..0xdfff
+                ) return null
                 result.appendCodePoint(codepoint)
             }
+
             else -> return null
         }
     }
     return result.toString()
 }
-

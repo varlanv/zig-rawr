@@ -4,12 +4,7 @@ import com.zigrawr.lang.bin.asList
 import com.zigrawr.lang.bin.asReadonly
 import com.zigrawr.lang.log.Log
 import com.zigrawr.zig.ast.ParseMode
-import com.zigrawr.zig.foreign.model.Ast
-import com.zigrawr.zig.foreign.model.ErrorExtraKind
-import com.zigrawr.zig.foreign.model.ErrorTag
-import com.zigrawr.zig.foreign.model.Mode
-import com.zigrawr.zig.foreign.model.NodeTag
-import com.zigrawr.zig.foreign.model.TokenTag
+import com.zigrawr.zig.foreign.model.*
 import com.zigrawr.zig.tokenizer.BaseSpec
 import com.zigrawr.zig.tokenizer.useTempDir
 import io.kotest.assertions.throwables.shouldThrow

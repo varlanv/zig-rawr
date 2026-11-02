@@ -9,12 +9,15 @@ import com.intellij.openapi.util.Ref
 import com.intellij.psi.PsiElement
 import java.nio.file.Path
 
-abstract class ZigContextConfigurationProducer(private val allTests: Boolean) : LazyRunConfigurationProducer<ZigRunConfiguration>(), DumbAware {
+abstract class ZigContextConfigurationProducer(private val allTests: Boolean) :
+    LazyRunConfigurationProducer<ZigRunConfiguration>(), DumbAware {
     override fun getConfigurationFactory(): ConfigurationFactory = ZigRunConfigurationType.getInstance().factory
 
     private fun target(context: ConfigurationContext): ZigRunTarget? {
         val element = context.psiLocation ?: return null
-        return if (allTests) ZigRunTargets.fileTests(element.containingFile ?: return null) else ZigRunTargets.at(element)
+        return if (allTests) ZigRunTargets.fileTests(element.containingFile ?: return null) else ZigRunTargets.at(
+            element
+        )
     }
 
     override fun setupConfigurationFromContext(
@@ -33,11 +36,15 @@ abstract class ZigContextConfigurationProducer(private val allTests: Boolean) : 
         return true
     }
 
-    override fun isConfigurationFromContext(configuration: ZigRunConfiguration, context: ConfigurationContext): Boolean {
+    override fun isConfigurationFromContext(
+        configuration: ZigRunConfiguration,
+        context: ConfigurationContext
+    ): Boolean {
         val target = target(context) ?: return false
         val path = context.psiLocation?.containingFile?.virtualFile?.path ?: return false
         val configured = Path.of(configuration.filePath)
-        val absolute = if (configured.isAbsolute) configured else Path.of(configuration.project.basePath ?: ".").resolve(configured)
+        val absolute = if (configured.isAbsolute) configured else Path.of(configuration.project.basePath ?: ".")
+            .resolve(configured)
         return configuration.kind == target.kind && configuration.testName == target.testName &&
             absolute.normalize().toString() == path
     }

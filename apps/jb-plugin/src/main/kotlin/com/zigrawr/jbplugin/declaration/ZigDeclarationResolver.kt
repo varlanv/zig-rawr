@@ -1,7 +1,7 @@
 package com.zigrawr.jbplugin.declaration
 
-import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -26,7 +26,8 @@ internal object ZigDeclarationResolver {
             symbols.ast.forEachToken { index, tag, span ->
                 if (index and 255 == 0) ProgressManager.checkCanceled()
                 if (tag == TokenTag.BUILTIN && span.end - span.start == name.length &&
-                    symbols.source.regionMatches(span.start, name, 0, name.length)) {
+                    symbols.source.regionMatches(span.start, name, 0, name.length)
+                ) {
                     ranges.add(TextRange(span.start, span.end))
                 }
             }
@@ -52,7 +53,8 @@ internal object ZigDeclarationResolver {
         if (token < 0 || offset >= symbols.ast.tokenPositions(token).end) return null
         if (symbols.tag(token) == TokenTag.STRING_LITERAL) return importedFile(file, symbols, token)
         val declaration = identifier(file, symbols, token, 0) ?: return null
-        val targetOffset = declaration.symbols.ast.tokenPositions(declaration.symbols.nameToken(declaration.index)).start
+        val targetOffset =
+            declaration.symbols.ast.tokenPositions(declaration.symbols.nameToken(declaration.index)).start
         return declaration.file.findElementAt(targetOffset)
     }
 
@@ -76,13 +78,21 @@ internal object ZigDeclarationResolver {
                 val declaration = identifier(file, symbols, token, depth + 1) ?: return null
                 namespace(declaration, depth + 1)
             }
+
             TokenTag.R_PAREN -> {
                 val open = symbols.matching[token]
                 if (open < 0) return null
                 if (symbols.tag(open - 1) == TokenTag.BUILTIN) expression(file, symbols, open - 1, depth + 1, token)
-                else if (symbols.tag(open - 1) != TokenTag.IDENTIFIER) expression(file, symbols, open + 1, depth + 1, token - 1)
+                else if (symbols.tag(open - 1) != TokenTag.IDENTIFIER) expression(
+                    file,
+                    symbols,
+                    open + 1,
+                    depth + 1,
+                    token - 1
+                )
                 else null
             }
+
             else -> null
         }
     }
@@ -98,30 +108,37 @@ internal object ZigDeclarationResolver {
         return if (value < 0) null else expression(declaration.file, symbols, value, depth + 1)
     }
 
-    private fun expression(file: PsiFile, symbols: ZigDeclarations, first: Int, depth: Int,
-                           last: Int = Int.MAX_VALUE): Namespace? {
+    private fun expression(
+        file: PsiFile, symbols: ZigDeclarations, first: Int, depth: Int,
+        last: Int = Int.MAX_VALUE
+    ): Namespace? {
         ProgressManager.checkCanceled()
         if (depth >= MAX_RESOLUTION_DEPTH) return null
         var token = first
         while (symbols.tag(token) == TokenTag.ASTERISK || symbols.tag(token) == TokenTag.QUESTION_MARK ||
-            symbols.tag(token) == TokenTag.KEYWORD_CONST || symbols.tag(token) == TokenTag.KEYWORD_VOLATILE) token++
+            symbols.tag(token) == TokenTag.KEYWORD_CONST || symbols.tag(token) == TokenTag.KEYWORD_VOLATILE
+        ) token++
         var result = when (symbols.tag(token)) {
             TokenTag.IDENTIFIER -> {
                 val declaration = identifier(file, symbols, token, depth + 1) ?: return null
                 namespace(declaration, depth + 1)
             }
+
             TokenTag.BUILTIN -> when (symbols.text(token)) {
                 "@import" -> {
                     val imported = importedFile(file, symbols, token + 2) ?: return null
                     Namespace(imported, ZigDeclarations.get(imported), -1)
                 }
+
                 "@This" -> Namespace(file, symbols, symbols.enclosingNamespace(token))
                 else -> null
             }
+
             TokenTag.KEYWORD_STRUCT, TokenTag.KEYWORD_UNION, TokenTag.KEYWORD_ENUM, TokenTag.KEYWORD_OPAQUE -> {
                 val brace = symbols.containerBrace(token)
                 if (brace < 0) null else Namespace(file, symbols, brace)
             }
+
             TokenTag.L_PAREN -> expression(file, symbols, token + 1, depth + 1, symbols.matching[token] - 1)
             else -> null
         } ?: return null
@@ -129,7 +146,8 @@ internal object ZigDeclarationResolver {
             token = symbols.matching[token + 1]
         } else if (symbols.tag(token) == TokenTag.L_PAREN) token = symbols.matching[token]
         while (token >= 0 && token + 2 <= last && symbols.tag(token + 1) == TokenTag.PERIOD &&
-            symbols.tag(token + 2) == TokenTag.IDENTIFIER) {
+            symbols.tag(token + 2) == TokenTag.IDENTIFIER
+        ) {
             val name = symbols.name(token + 2) ?: return null
             val index = result.symbols.find(name, 0, result.scope, result.file != file)
             if (index < 0) return null
@@ -141,7 +159,8 @@ internal object ZigDeclarationResolver {
 
     private fun importedFile(file: PsiFile, symbols: ZigDeclarations, token: Int): PsiFile? {
         if (symbols.tag(token) != TokenTag.STRING_LITERAL || symbols.tag(token - 1) != TokenTag.L_PAREN ||
-            symbols.tag(token - 2) != TokenTag.BUILTIN || symbols.text(token - 2) != "@import") return null
+            symbols.tag(token - 2) != TokenTag.BUILTIN || symbols.text(token - 2) != "@import"
+        ) return null
         val close = symbols.matching[token - 1]
         if (close != token + 1 && !(close == token + 2 && symbols.tag(token + 1) == TokenTag.COMMA)) return null
         val path = symbols.string(token) ?: return null

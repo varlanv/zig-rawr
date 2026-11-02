@@ -49,6 +49,7 @@ class TokenBindingsSpec : BaseSpec({
                 check(index in start until end)
                 return text[index]
             }
+
             override fun subSequence(startIndex: Int, endIndex: Int): CharSequence = error("Unexpected copy")
         }
         val bindings = Bindings(handles)

@@ -12,7 +12,7 @@ import com.zigrawr.zig.ast.ParseMode
 import com.zigrawr.zig.foreign.model.Ast
 import com.zigrawr.zig.foreign.model.NodeTag
 import com.zigrawr.zig.foreign.model.TokenTag
-import java.util.Arrays
+import java.util.*
 
 private const val DECLARATION_WORDS = 7
 private const val PUBLIC = 1
@@ -63,9 +63,11 @@ internal class ZigDeclarations private constructor(
                             index = nextExpressionToken(index)
                         }
                         val owner = owners[main]
-                        add(records, name, owner, scopeEnd(owner), if (isNamespace(owner)) 0 else end + 1,
+                        add(
+                            records, name, owner, scopeEnd(owner), if (isNamespace(owner)) 0 else end + 1,
                             value, if (tag(name + 1) == TokenTag.COLON) name + 2 else -1,
-                            visibility(node, main))
+                            visibility(node, main)
+                        )
                     }
                 }
 
@@ -86,7 +88,8 @@ internal class ZigDeclarations private constructor(
                         val close = matching[paren]
                         while (index < close) {
                             while (tag(index) == TokenTag.DOC_COMMENT || tag(index) == TokenTag.KEYWORD_COMPTIME ||
-                                tag(index) == TokenTag.KEYWORD_NOALIAS) index++
+                                tag(index) == TokenTag.KEYWORD_NOALIAS
+                            ) index++
                             if (tag(index) == TokenTag.IDENTIFIER && tag(index + 1) == TokenTag.COLON) {
                                 add(records, index, main, end, index + 1, -1, index + 2, 0)
                             }
@@ -99,8 +102,10 @@ internal class ZigDeclarations private constructor(
                 NodeTag.CONTAINER_FIELD, NodeTag.CONTAINER_FIELD_INIT, NodeTag.CONTAINER_FIELD_ALIGN -> {
                     if (tag(main) == TokenTag.IDENTIFIER) {
                         val owner = owners[main]
-                        add(records, main, owner, scopeEnd(owner), 0, -1,
-                            if (tag(main + 1) == TokenTag.COLON) main + 2 else -1, PUBLIC or FIELD)
+                        add(
+                            records, main, owner, scopeEnd(owner), 0, -1,
+                            if (tag(main + 1) == TokenTag.COLON) main + 2 else -1, PUBLIC or FIELD
+                        )
                     }
                 }
 
@@ -148,7 +153,8 @@ internal class ZigDeclarations private constructor(
             if (visible && (!publicOnly || flags and PUBLIC != 0) && matchesName(declarations[index], name)) {
                 val width = end - start
                 if (width < bestWidth || width == bestWidth &&
-                    (best < 0 || declarations[index] > declarations[best])) {
+                    (best < 0 || declarations[index] > declarations[best])
+                ) {
                     best = index
                     bestWidth = width
                 }
@@ -183,6 +189,7 @@ internal class ZigDeclarations private constructor(
                             nameToken = declarations[index]
                             break
                         }
+
                     else -> Unit
                 }
                 index += DECLARATION_WORDS
@@ -203,6 +210,7 @@ internal class ZigDeclarations private constructor(
                     if (matching[index] < 0) return -1
                     index = matching[index]
                 }
+
                 TokenTag.SEMICOLON, TokenTag.EOF -> return -1
                 else -> Unit
             }
@@ -229,6 +237,7 @@ internal class ZigDeclarations private constructor(
                     stack[depth++] = token
                     if (tag(token) == TokenTag.L_BRACE) owner = token
                 }
+
                 TokenTag.R_PAREN, TokenTag.R_BRACKET, TokenTag.R_BRACE -> {
                     val expected = when (tag(token)) {
                         TokenTag.R_PAREN -> TokenTag.L_PAREN
@@ -242,6 +251,7 @@ internal class ZigDeclarations private constructor(
                         if (expected == TokenTag.L_BRACE) owner = owners[opener]
                     }
                 }
+
                 else -> Unit
             }
         }
@@ -267,8 +277,10 @@ internal class ZigDeclarations private constructor(
         return span.end - span.start == name.length && source.regionMatches(span.start, name, 0, name.length)
     }
 
-    private fun add(records: IntList, name: Int, start: Int, end: Int, visibleFrom: Int,
-                    value: Int, type: Int, flags: Int) {
+    private fun add(
+        records: IntList, name: Int, start: Int, end: Int, visibleFrom: Int,
+        value: Int, type: Int, flags: Int
+    ) {
         records.ensureCapacity(DECLARATION_WORDS)
         records.addAssumeCapacity(name)
         records.addAssumeCapacity(start)
@@ -301,5 +313,6 @@ private fun NodeTag.isContainer(): Boolean = when (this) {
     NodeTag.TAGGED_UNION, NodeTag.TAGGED_UNION_TRAILING,
     NodeTag.TAGGED_UNION_TWO, NodeTag.TAGGED_UNION_TWO_TRAILING,
     NodeTag.TAGGED_UNION_ENUM_TAG, NodeTag.TAGGED_UNION_ENUM_TAG_TRAILING -> true
+
     else -> false
 }

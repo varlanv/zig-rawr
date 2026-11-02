@@ -1,7 +1,6 @@
 package com.zigrawr.jbplugin.highlight
 
 import com.intellij.lexer.Lexer
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.HighlighterColors
 import com.intellij.openapi.editor.colors.TextAttributesKey

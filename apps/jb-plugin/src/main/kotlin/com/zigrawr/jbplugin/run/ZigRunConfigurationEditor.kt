@@ -24,15 +24,17 @@ class ZigRunConfigurationEditor(project: Project) : SettingsEditor<ZigRunConfigu
         addBrowseFolderListener(project, FileChooserDescriptorFactory.singleDir().withTitle("Select Working Directory"))
     }
     private val panel = JPanel(BorderLayout()).apply {
-        add(FormBuilder.createFormBuilder()
-            .addLabeledComponent("Run:", kind)
-            .addLabeledComponent("Source file:", sourceFile)
-            .addLabeledComponent("Test name or group:", testName)
-            .addLabeledComponent("Compiler arguments:", compilerArguments)
-            .addLabeledComponent("Program arguments:", programArguments)
-            .addLabeledComponent("Working directory:", workingDirectory)
-            .addTooltip("Leave the working directory empty to use the source file's directory.")
-            .panel, BorderLayout.NORTH)
+        add(
+            FormBuilder.createFormBuilder()
+                .addLabeledComponent("Run:", kind)
+                .addLabeledComponent("Source file:", sourceFile)
+                .addLabeledComponent("Test name or group:", testName)
+                .addLabeledComponent("Compiler arguments:", compilerArguments)
+                .addLabeledComponent("Program arguments:", programArguments)
+                .addLabeledComponent("Working directory:", workingDirectory)
+                .addTooltip("Leave the working directory empty to use the source file's directory.")
+                .panel, BorderLayout.NORTH
+        )
     }
 
     init {

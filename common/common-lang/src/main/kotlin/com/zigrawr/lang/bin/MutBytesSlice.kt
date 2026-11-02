@@ -1,7 +1,5 @@
 package com.zigrawr.lang.bin
 
-import kotlin.jvm.JvmInline
-
 @Suppress("NOTHING_TO_INLINE")
 @JvmInline
 value class MutBytesSlice @PublishedApi internal constructor(@PublishedApi internal val delegate: BytesSlice) {
