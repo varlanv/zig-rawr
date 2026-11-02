@@ -18,9 +18,9 @@ class ZigHighlightUsagesHandlerFactory : HighlightUsagesHandlerFactoryBase(), Du
         psiFile: PsiFile,
         target: PsiElement,
     ): HighlightUsagesHandlerBase<*>? {
-        if (psiFile.fileType != ZigFileType || target.node?.elementType != ZigTokenTypes.forTag(TokenTag.IDENTIFIER)) {
-            return null
-        }
+        if (psiFile.fileType != ZigFileType) return null
+        val type = target.node?.elementType
+        if (type != ZigTokenTypes.forTag(TokenTag.IDENTIFIER) && type != ZigTokenTypes.forTag(TokenTag.BUILTIN)) return null
         return ZigHighlightUsagesHandler(editor, psiFile, target)
     }
 }

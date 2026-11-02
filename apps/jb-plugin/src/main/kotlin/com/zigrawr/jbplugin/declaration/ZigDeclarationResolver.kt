@@ -20,6 +20,18 @@ internal object ZigDeclarationResolver {
         val symbols = ZigDeclarations.get(file)
         val token = symbols.tokenAt(offset)
         if (token < 0 || offset >= symbols.ast.tokenPositions(token).end) return emptyList()
+        if (symbols.tag(token) == TokenTag.BUILTIN) {
+            val name = symbols.text(token)
+            val ranges = ArrayList<TextRange>()
+            symbols.ast.forEachToken { index, tag, span ->
+                if (index and 255 == 0) ProgressManager.checkCanceled()
+                if (tag == TokenTag.BUILTIN && span.end - span.start == name.length &&
+                    symbols.source.regionMatches(span.start, name, 0, name.length)) {
+                    ranges.add(TextRange(span.start, span.end))
+                }
+            }
+            return ranges
+        }
         val name = symbols.name(token) ?: return emptyList()
         val target = identifier(file, symbols, token, 0) ?: return emptyList()
         val ranges = ArrayList<TextRange>()

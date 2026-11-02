@@ -10,6 +10,23 @@ import com.zigrawr.jbplugin.runSelectionFixture
 import io.kotest.matchers.shouldBe
 
 class ZigDeclarationHandlerSpec : IdeaHarness({
+    should("navigate from every caret position through the end of an identifier") {
+        runSelectionFixture({ fixture ->
+            val source = "const value = 1;\nfn target() void {}\nfn caller() void { target(); _ = value; }"
+            fixture.configureByText("caret-navigation.zig", source)
+            for ((usage, name) in listOf("target();" to "target", "value;" to "value")) {
+                val start = source.indexOf(usage)
+                for (position in 0..name.length) {
+                    val offset = start + position
+                    fixture.editor.caretModel.moveToOffset(offset)
+                    val target = GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, offset).single()
+                    target.text shouldBe name
+                    target.textOffset shouldBe source.indexOf(name)
+                }
+            }
+        }, "zig identifier caret navigation")
+    }
+
     should("navigate lexical declarations and refresh them after edits") {
         runSelectionFixture({ fixture ->
             val source = """

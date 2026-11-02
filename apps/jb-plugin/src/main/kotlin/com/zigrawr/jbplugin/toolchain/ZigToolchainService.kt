@@ -17,6 +17,8 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.zigrawr.jbplugin.IdeProcessState
+import com.zigrawr.jbplugin.builtin.ZigBuiltinCatalog
+import com.zigrawr.jbplugin.builtin.ZigBuiltinEntry
 import com.zigrawr.jbplugin.lexer.decodeZigStringLiteral
 import com.zigrawr.zig.foreign.model.TokenTag
 import com.zigrawr.zig.foreign.model.Tokens
@@ -32,6 +34,7 @@ private data class ToolchainSnapshot(
     val info: ZigToolchainInfo?,
     val root: VirtualFile?,
     val libraries: List<SyntheticLibrary>,
+    val builtins: ZigBuiltinCatalog?,
     val message: String,
 )
 
@@ -43,7 +46,7 @@ class ZigToolchainService(private val project: Project) : Disposable {
     )
 
     @Volatile
-    private var snapshot = ToolchainSnapshot("", null, null, emptyList(), "Zig has not been detected yet.")
+    private var snapshot = ToolchainSnapshot("", null, null, emptyList(), null, "Zig has not been detected yet.")
 
     val currentInfo: ZigToolchainInfo?
         get() = currentSnapshot()?.info
@@ -68,6 +71,8 @@ class ZigToolchainService(private val project: Project) : Disposable {
 
     internal fun standardLibraryFile(): VirtualFile? = currentSnapshot()?.root?.findChild("std.zig")
 
+    internal fun builtin(name: String): ZigBuiltinEntry? = currentSnapshot()?.builtins?.find(name)
+
     fun inspect(executable: String): CompletableFuture<ZigToolchainInfo> =
         CompletableFuture.supplyAsync({ probe(executable.trim()) }, executor)
 
@@ -76,18 +81,21 @@ class ZigToolchainService(private val project: Project) : Disposable {
         val selection = project.service<ZigToolchainSettings>().executable.trim()
         val request = generation.incrementAndGet()
         val completed = CompletableFuture<ZigToolchainInfo?>()
-        inspect(selection).whenComplete { info, error ->
+        inspect(selection).whenCompleteAsync({ info, error ->
             var root: VirtualFile? = null
+            var builtins: ZigBuiltinCatalog? = null
             var failure = error?.cause ?: error
             if (info != null && failure == null && !project.isDisposed && request == generation.get()) {
                 try {
                     root = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(info.stdDirectory, "std.zig"))?.parent
                     check(root != null) { "The Zig standard library is not available in the IDE filesystem." }
+                    builtins = runCatching { ZigBuiltinCatalog.load(info) }.getOrNull()
                 } catch (exception: Exception) {
                     failure = exception
                 }
             }
             val resolvedRoot = root
+            val resolvedBuiltins = builtins
             val message = failure?.message ?: "Ready"
             ApplicationManager.getApplication().invokeLater({
                 try {
@@ -99,7 +107,8 @@ class ZigToolchainService(private val project: Project) : Disposable {
                     val previous = snapshot
                     val ready = if (resolvedRoot == null || failure != null) null else info
                     val libraries = if (ready == null) emptyList() else listOf(ZigStandardLibrary(resolvedRoot!!, ready.version))
-                    snapshot = ToolchainSnapshot(selection, ready, resolvedRoot, libraries, message)
+                    snapshot = ToolchainSnapshot(selection, ready, resolvedRoot, libraries,
+                        if (ready == null) null else resolvedBuiltins, message)
                     WriteAction.run<RuntimeException> {
                         AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(
                             project, "Zig standard library", previous.libraries.flatMap { it.sourceRoots },
@@ -112,7 +121,7 @@ class ZigToolchainService(private val project: Project) : Disposable {
                     completed.completeExceptionally(exception)
                 }
             }, modality)
-        }
+        }, executor)
         return completed
     }
 
