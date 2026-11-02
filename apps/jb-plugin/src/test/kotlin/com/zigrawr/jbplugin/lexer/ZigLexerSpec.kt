@@ -1,9 +1,12 @@
 package com.zigrawr.jbplugin.lexer
 
+import com.intellij.psi.TokenType
 import com.intellij.psi.tree.IElementType
 import com.zigrawr.lang.log.Log
 import com.zigrawr.zig.foreign.Bindings
 import com.zigrawr.zig.foreign.BundledBindingsLoader
+import com.zigrawr.zig.foreign.model.TokenTag
+import com.zigrawr.zig.foreign.model.Tokens
 import com.zigrawr.zig.tokenizer.BaseSpec
 import io.kotest.matchers.shouldBe
 
@@ -23,6 +26,26 @@ class ZigLexerSpec : BaseSpec({
                 for (start in 0..end) {
                     val expected = complete.filter { it.end > start }.map { it.copy(start = maxOf(it.start, start)) }
                     readTokens(lexer, source, start, end) shouldBe expected
+                }
+            }
+
+            val largeSource = source + "\n" + (" \t\r\n".repeat(2048)) +
+                "const long_line = \"" + "π😀".repeat(4096) + "\";\r\n" +
+                (source + "\n").repeat(128) + "const last = 42; // final comment"
+            for (end in listOf(4095, 4096, 4097, 8192, largeSource.length - 2, largeSource.length)) {
+                val complete = readTokens(lexer, largeSource, 0, end)
+                val native = Tokens(bindings.tokens.parseChars(largeSource, 0, end))
+                val expectedNative = ArrayList<LexedToken>()
+                native.forEachToken { _, tag, span ->
+                    if (tag != TokenTag.EOF) {
+                        expectedNative.add(LexedToken(ZigTokenTypes.forTag(tag), span.start, span.end))
+                    }
+                }
+                complete.filter { it.type != TokenType.WHITE_SPACE && it.type != ZigTokenTypes.LINE_COMMENT } shouldBe
+                    expectedNative
+                for (start in listOf(0, 1, 4094, 4095, 4096, 8191, end - 1, end).filter { it <= end }) {
+                    val expected = complete.filter { it.end > start }.map { it.copy(start = maxOf(it.start, start)) }
+                    readTokens(lexer, largeSource, start, end) shouldBe expected
                 }
             }
         } finally {
