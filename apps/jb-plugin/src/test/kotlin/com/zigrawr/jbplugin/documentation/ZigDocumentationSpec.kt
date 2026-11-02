@@ -2,13 +2,21 @@ package com.zigrawr.jbplugin.documentation
 
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.service
+import com.intellij.openapi.util.TextRange
+import com.intellij.codeInsight.highlighting.HighlightUsagesHandler
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
+import com.intellij.openapi.editor.colors.EditorColors
 import com.intellij.platform.backend.documentation.DocumentationData
 import com.intellij.platform.backend.documentation.DocumentationTarget
 import com.intellij.platform.backend.documentation.DocumentationTargetProvider
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
+import com.intellij.testFramework.PlatformTestUtil
 import com.zigrawr.jbplugin.IdeaHarness
 import com.zigrawr.jbplugin.runSelectionFixture
+import com.zigrawr.jbplugin.toolchain.ZigToolchainService
+import com.zigrawr.jbplugin.toolchain.ZigToolchainSettings
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -90,6 +98,70 @@ class ZigDocumentationSpec : IdeaHarness({
             after shouldNotContain "Adds one."
             html(targets(fixture, "alias.add(2)", "add").single()) shouldBe after
         }, "zig imported documentation")
+    }
+
+    should("show inferred local types from standard library generic functions and error handling") {
+        runSelectionFixture({ fixture ->
+            fixture.project.service<ZigToolchainSettings>().executable = ""
+            PlatformTestUtil.waitForFuture(fixture.project.service<ZigToolchainService>().refresh(), 15_000)!!
+            fixture.configureByText(
+                "inferred_types.zig", """
+                const std = @import("std");
+                fn reserve(cursor: *usize, alignment: usize, count: usize, itemSize: usize) error{TooLarge}!u32 {
+                    const start = std.mem.alignForward(usize, cursor.*, alignment);
+                    const size = std.math.mul(usize, count, itemSize) catch return error.TooLarge;
+                    const end = std.math.add(usize, start, size) catch return error.TooLarge;
+                    cursor.* = end;
+                    return @intCast(start);
+                }
+            """.trimIndent()
+            )
+            for (name in listOf("start", "size", "end")) {
+                val declaration = html(targets(fixture, "const $name =", name).single())
+                declaration shouldContain "const $name ="
+                declaration shouldContain "Type: <code>usize</code>"
+            }
+            html(targets(fixture, "start, size)", "size").single()) shouldContain "Type: <code>usize</code>"
+            html(targets(fixture, "cursor.* = end", "end").single()) shouldContain "Type: <code>usize</code>"
+            html(targets(fixture, "cursor: *usize", "cursor").single()) shouldContain "cursor: *usize"
+        }, "zig inferred local documentation")
+    }
+
+    should("document and navigate built-in properties on string literals and slices") {
+        runSelectionFixture({ fixture ->
+            fixture.configureByText(
+                "builtin_properties.zig", """
+                fn example(bytes: []align(8) u8) void {
+                    const fallback = "".ptr;
+                    _ = fallback;
+                    _ = bytes.ptr;
+                    _ = bytes.len;
+                }
+            """.trimIndent()
+            )
+            html(targets(fixture, "\"\".ptr", "ptr").single()) shouldContain "ptr: [*:0]const u8"
+            html(targets(fixture, "const fallback =", "fallback").single()) shouldContain "Type: <code>[*:0]const u8</code>"
+            html(targets(fixture, "bytes.ptr", "ptr").single()) shouldContain "ptr: [*]align(8) u8"
+            html(targets(fixture, "bytes.len", "len").single()) shouldContain "len: usize"
+            val source = fixture.editor.document.text
+            val literalOffset = source.indexOf("\"\".ptr") + 3
+            fixture.editor.caretModel.moveToOffset(literalOffset)
+            val target = GotoDeclarationAction.findAllTargetElements(fixture.project, fixture.editor, literalOffset).single()
+            target.text shouldBe "\"\""
+            HighlightUsagesHandler.invoke(fixture.project, fixture.editor, fixture.file)
+            fixture.editor.markupModel.allHighlighters.filter {
+                it.textAttributesKey == EditorColors.SEARCH_RESULT_ATTRIBUTES ||
+                    it.textAttributesKey == EditorColors.WRITE_SEARCH_RESULT_ATTRIBUTES
+            }.map { TextRange(it.startOffset, it.endOffset) } shouldBe listOf(TextRange.from(literalOffset, 3))
+            val pointer = ReadAction.computeBlocking<com.intellij.model.Pointer<out DocumentationTarget>, RuntimeException> {
+                targets(fixture, "\"\".ptr", "ptr").single().createPointer()
+            }
+            WriteCommandAction.runWriteCommandAction(fixture.project) {
+                fixture.editor.document.insertString(0, "\n")
+            }
+            PsiDocumentManager.getInstance(fixture.project).commitAllDocuments()
+            html(pointer.dereference()!!) shouldContain "ptr: [*:0]const u8"
+        }, "zig built-in property documentation")
     }
 })
 

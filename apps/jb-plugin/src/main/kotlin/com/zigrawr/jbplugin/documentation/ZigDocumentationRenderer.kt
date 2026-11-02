@@ -5,6 +5,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 import com.zigrawr.jbplugin.declaration.ZigDeclarations
+import com.zigrawr.jbplugin.declaration.ZigInferredType
 import com.zigrawr.zig.foreign.model.NodeTag
 import com.zigrawr.zig.foreign.model.TokenTag
 
@@ -65,6 +66,15 @@ internal object ZigDocumentationRenderer {
         html.append(StringUtil.escapeXmlEntities(symbols.source.subSequence(start, end).toString()))
         html.append(suffix)
         html.append(DocumentationMarkup.DEFINITION_END)
+        if (symbols.tag(token + 1) != TokenTag.COLON) {
+            ZigInferredType.typeText(declaration.containingFile, declaration.textOffset)?.let { type ->
+                html.append(DocumentationMarkup.CONTENT_START)
+                html.append("Type: <code>")
+                html.append(StringUtil.escapeXmlEntities(type))
+                html.append("</code>")
+                html.append(DocumentationMarkup.CONTENT_END)
+            }
+        }
         appendComments(html, symbols, start)
         return html.toString()
     }

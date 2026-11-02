@@ -8,13 +8,17 @@
     <depends>com.intellij.modules.cidr.debugger</depends>
     <depends>com.intellij.modules.clion</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <annotator language="Zig" implementationClass="com.zigrawr.jbplugin.highlight.ZigSemanticAnnotator"/>
+        <colorSettingsPage implementation="com.zigrawr.jbplugin.highlight.ZigColorSettingsPage"/>
+        <additionalTextAttributes scheme="Default" file="colorSchemes/ZigDefault.xml"/>
+        <additionalTextAttributes scheme="Darcula" file="colorSchemes/ZigDarcula.xml"/>
         <configurationType implementation="com.zigrawr.jbplugin.run.ZigRunConfigurationType"/>
         <runConfigurationProducer implementation="com.zigrawr.jbplugin.run.ZigRunConfigurationProducer"/>
         <runConfigurationProducer implementation="com.zigrawr.jbplugin.run.ZigFileTestsConfigurationProducer"/>
         <runLineMarkerContributor language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigRunLineMarkerContributor"/>
         <programRunner implementation="com.zigrawr.jbplugin.run.ZigProgramRunner"/>
         <programRunner implementation="com.zigrawr.jbplugin.run.ZigDebugRunner"/>
-        <projectConfigurable parentId="language" id="com.zigrawr.toolchain" displayName="Zig"
+        <projectConfigurable parentId="language" id="com.zigrawr.toolchain" displayName="Zig Rawr"
                              instance="com.zigrawr.jbplugin.toolchain.ZigToolchainConfigurable"/>
         <additionalLibraryRootsProvider implementation="com.zigrawr.jbplugin.toolchain.ZigLibraryRootsProvider"/>
         <postStartupActivity implementation="com.zigrawr.jbplugin.toolchain.ZigToolchainStartupActivity"/>

@@ -75,10 +75,10 @@ class ZigRunSpec : IdeaHarness({
                 val error = shouldThrow<RuntimeConfigurationError> {
                     ZigRunCommandLineState.createCommandLine(single, buildOnly = buildOnly)
                 }
-                error.localizedMessage.orEmpty() shouldContain "substring"
+                error.localizedMessage.orEmpty() shouldContain "--test-filter"
                 error.localizedMessage.orEmpty() shouldContain "checks.test.foo"
                 error.localizedMessage.orEmpty() shouldContain "checks.test.foobar"
-                error.localizedMessage.orEmpty() shouldContain "Rename"
+                error.localizedMessage.orEmpty().lowercase() shouldContain "rename"
             }
             WriteCommandAction.runWriteCommandAction(fixture.project) {
                 fixture.editor.document.setText(source.replace("test \"foobar\"", "test \"barfoo\""))

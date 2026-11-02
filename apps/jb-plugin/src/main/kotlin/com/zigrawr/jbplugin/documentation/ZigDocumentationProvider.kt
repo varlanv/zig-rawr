@@ -21,6 +21,9 @@ class ZigDocumentationProvider : DocumentationTargetProvider, DumbAware {
         val adjusted = if (document == null) offset else TargetElementUtil.adjustOffset(file, document, offset)
         file.findElementAt(adjusted)?.let { source ->
             ZigBuiltinPsiElement.create(source)?.let { return listOf(ZigBuiltinDocumentationTarget(it)) }
+            if (ZigDeclarationResolver.propertyType(file, adjusted) != null) {
+                return listOf(ZigPropertyDocumentationTarget(source))
+            }
         }
         val declaration = ZigDeclarationResolver.resolve(file, adjusted) ?: return emptyList()
         if (declaration is PsiFile) return emptyList()

@@ -10,6 +10,7 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.FormBuilder
+import com.zigrawr.jbplugin.highlight.ZigSemanticStylesPanel
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.util.concurrent.CompletableFuture
@@ -31,6 +32,7 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
         val detectedExecutable = JBLabel().setCopyable(true)
         val version = JBLabel()
         val standardLibrary = JBLabel().setCopyable(true)
+        val styles = ZigSemanticStylesPanel()
         val panel = JPanel(BorderLayout()).apply {
             add(
                 FormBuilder.createFormBuilder()
@@ -44,6 +46,8 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
                     .addLabeledComponent("Detected executable:", detectedExecutable)
                     .addLabeledComponent("Version:", version)
                     .addLabeledComponent("Standard library:", standardLibrary)
+                    .addSeparator()
+                    .addComponent(styles.panel)
                     .panel, BorderLayout.NORTH
             )
         }
@@ -53,7 +57,7 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
     private var request = 0
 
     override fun getId(): String = "com.zigrawr.toolchain"
-    override fun getDisplayName(): String = "Zig"
+    override fun getDisplayName(): String = "Zig Rawr"
     override fun getPreferredFocusedComponent(): JComponent? = form?.executable?.textField
 
     override fun createComponent(): JComponent {
@@ -76,12 +80,16 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
         return created.panel
     }
 
-    override fun isModified(): Boolean =
-        form?.executable?.text?.trim()?.let { it != project.service<ZigToolchainSettings>().executable } ?: false
+    override fun isModified(): Boolean {
+        val current = form ?: return false
+        return current.styles.isModified() || current.executable.text.trim() != project.service<ZigToolchainSettings>().executable
+    }
 
     override fun apply() {
         val current = form ?: return
+        current.styles.apply()
         val executable = current.executable.text.trim()
+        if (project.service<ZigToolchainSettings>().executable == executable) return
         project.service<ZigToolchainSettings>().executable = executable
         update(current, executable, project.service<ZigToolchainService>().refresh())
     }
@@ -92,6 +100,7 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
         current.check.isEnabled = true
         current.reload.isEnabled = true
         current.executable.text = project.service<ZigToolchainSettings>().executable
+        current.styles.reset()
         val service = project.service<ZigToolchainService>()
         display(current, service.currentInfo, service.statusMessage)
     }
