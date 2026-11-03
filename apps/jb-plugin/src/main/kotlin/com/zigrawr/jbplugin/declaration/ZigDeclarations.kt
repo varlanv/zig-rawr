@@ -1,10 +1,12 @@
 package com.zigrawr.jbplugin.declaration
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.zigrawr.jbplugin.IdeProcessState
+import com.zigrawr.jbplugin.IdeProjectState
 import com.zigrawr.jbplugin.lexer.decodeZigStringLiteral
 import com.zigrawr.lang.primitives.IntList
 import com.zigrawr.lang.primitives.LongList
@@ -36,7 +38,8 @@ internal class ZigDeclarations private constructor(
     private val nameNext: IntArray
     private val functionRanges: LongArray
     private val branchExpressions: LongArray
-    @Volatile private var expressionEnds = LongArray(0)
+    @Volatile
+    private var expressionEnds = LongArray(0)
 
     init {
         buildDelimiters()
@@ -154,8 +157,9 @@ internal class ZigDeclarations private constructor(
                         if (tag(capture) == TokenTag.ASTERISK) capture++
                         if (tag(capture) != TokenTag.IDENTIFIER) break
                         val inputNode = if (tag == NodeTag.FOR_SIMPLE) first else extra(first + input)
-                        val kind = if (inputNode in 1 until ast.nodeCount() && ast.nodeTag(inputNode) == NodeTag.FOR_RANGE)
-                            ZigCaptureKind.INDEX else ZigCaptureKind.ELEMENT
+                        val kind =
+                            if (inputNode in 1 until ast.nodeCount() && ast.nodeTag(inputNode) == NodeTag.FOR_RANGE)
+                                ZigCaptureKind.INDEX else ZigCaptureKind.ELEMENT
                         addCaptureName(records, capture, close + 1, end, nodeStart(inputNode), kind)
                         capture++
                         input++
@@ -466,12 +470,13 @@ internal class ZigDeclarations private constructor(
         fun get(file: PsiFile): ZigDeclarations {
             val document = PsiDocumentManager.getInstance(file.project).getDocument(file)
             val stamp = document?.modificationStamp ?: file.modificationStamp
-            val cached = file.getUserData(declarationsKey)
+            val cache = file.project.service<IdeProjectState>()
+            val cached = cache.cached(file, declarationsKey)
             if (cached != null && cached.stamp == stamp) return cached
             val source = document?.immutableCharSequence ?: file.viewProvider.contents
             val ast = Ast(IdeProcessState.getInstance().bindings.ast.parseChars(source, ParseMode.Zig))
             val result = ZigDeclarations(stamp, source, ast)
-            file.putUserData(declarationsKey, result)
+            cache.cache(file, declarationsKey, result)
             return result
         }
     }

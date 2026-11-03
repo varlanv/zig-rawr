@@ -8,11 +8,7 @@ import com.intellij.openapi.options.ConfigurationException
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
-import java.awt.Color
-import java.awt.Font
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
+import java.awt.*
 import javax.swing.JButton
 import javax.swing.JPanel
 
@@ -37,7 +33,9 @@ internal class ZigSemanticStylesPanel {
             return Color(value.toInt(16))
         }
 
-        fun font(): Int = (if (bold.isSelected) Font.BOLD else Font.PLAIN) or (if (italic.isSelected) Font.ITALIC else Font.PLAIN)
+        fun font(): Int =
+            (if (bold.isSelected) Font.BOLD else Font.PLAIN) or (if (italic.isSelected) Font.ITALIC else Font.PLAIN)
+
         fun isModified(): Boolean = foreground() != originalColor || font() != originalFont
     }
 
@@ -96,7 +94,10 @@ internal class ZigSemanticStylesPanel {
         val colors = rows.map { row ->
             row.foreground() ?: run {
                 row.color.requestFocusInWindow()
-                throw ConfigurationException("${row.label}: enter six hexadecimal digits, for example #C6B56B.", "Invalid Zig color")
+                throw ConfigurationException(
+                    "${row.label}: enter six hexadecimal digits, for example #C6B56B.",
+                    "Invalid Zig color"
+                )
             }
         }
         if (!isModified()) return
@@ -113,7 +114,8 @@ internal class ZigSemanticStylesPanel {
         } else original
         for ((index, row) in rows.withIndex()) {
             if (!row.isModified()) continue
-            val attributes = scheme.getAttributes(row.key)?.clone() ?: com.intellij.openapi.editor.markup.TextAttributes()
+            val attributes =
+                scheme.getAttributes(row.key)?.clone() ?: com.intellij.openapi.editor.markup.TextAttributes()
             attributes.foregroundColor = colors[index]
             attributes.fontType = row.font()
             scheme.setAttributes(row.key, attributes)

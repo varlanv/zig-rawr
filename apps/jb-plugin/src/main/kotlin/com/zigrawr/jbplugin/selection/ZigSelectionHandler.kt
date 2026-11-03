@@ -1,11 +1,13 @@
 package com.zigrawr.jbplugin.selection
 
 import com.intellij.codeInsight.editorActions.ExtendWordSelectionHandler
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.zigrawr.jbplugin.IdeProcessState
+import com.zigrawr.jbplugin.IdeProjectState
 import com.zigrawr.jbplugin.file.ZigFileType
 import com.zigrawr.jbplugin.file.ZonFileType
 import com.zigrawr.zig.ast.ParseMode
@@ -25,15 +27,16 @@ class ZigSelectionHandler : ExtendWordSelectionHandler {
         val document = editor.document
         val mode = if (e.containingFile.fileType == ZonFileType) ParseMode.Zon else ParseMode.Zig
         val stamp = document.modificationStamp
-        val cached = document.getUserData(selectionSnapshotKey)
+        val cache = e.project.service<IdeProjectState>()
+        val cached = cache.cached(document, selectionSnapshotKey)
         val ranges = if (cached != null && cached.stamp == stamp && cached.mode == mode) {
             cached.ranges
         } else {
             val text = document.immutableCharSequence
             val ast = Ast(IdeProcessState.getInstance().bindings.ast.parseChars(text, mode))
             val r = ZigSelectionRanges.build(ast, text)
-            if (document.modificationStamp == stamp) document.putUserData(
-                selectionSnapshotKey,
+            if (document.modificationStamp == stamp) cache.cache(
+                document, selectionSnapshotKey,
                 SelectionSnapshot(stamp, mode, r)
             )
             r

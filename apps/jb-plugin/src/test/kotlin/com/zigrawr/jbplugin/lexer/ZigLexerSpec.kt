@@ -9,9 +9,12 @@ import com.zigrawr.zig.foreign.model.TokenTag
 import com.zigrawr.zig.foreign.model.Tokens
 import com.zigrawr.zig.tokenizer.BaseSpec
 import io.kotest.matchers.shouldBe
+import java.lang.foreign.Arena
 
 class ZigLexerSpec : BaseSpec({
-    val handles = context(Log.stderr) { BundledBindingsLoader.load() }
+    val arena = Arena.ofShared()
+    afterSpec { arena.close() }
+    val handles = context(Log.stderr) { BundledBindingsLoader.load(arena) }
 
     should("match full lexing when restarted inside tokens and UTF-16 pairs") {
         val bindings = Bindings(handles)

@@ -1,6 +1,7 @@
 package com.zigrawr.zig.foreign
 
 import com.zigrawr.lang.log.Log
+import java.lang.foreign.Arena
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
@@ -9,7 +10,7 @@ import java.util.*
 object BundledBindingsLoader {
 
     context(log: Log)
-    fun load(): Handles {
+    fun load(arena: Arena): Handles {
         val pathPrefix = "/native/zigLib"
         val metadataPath = "$pathPrefix/metadata"
         val metadataIs = BundledBindingsLoader::class.java.getResourceAsStream(metadataPath)
@@ -65,7 +66,7 @@ object BundledBindingsLoader {
                 binaryUrl.openStream().use { Files.copy(it, extracted, REPLACE_EXISTING) }
                 extracted
             }
-            Loader.loadFromPath(binaryPath)
+            Loader.loadFromPath(arena, binaryPath)
         } catch (e: Exception) {
             log.debug { "Failed to load binary - [ ${e.message} ]" }
             throw e

@@ -37,12 +37,14 @@ internal object ZigInferredType {
                 val length = stringByteLength(symbols, token) ?: return null
                 "*const [$length:0]u8"
             }
+
             TokenTag.NUMBER_LITERAL -> {
                 val number = symbols.text(token)
                 if (number.indexOf('.') >= 0 || number.indexOfAny(charArrayOf('p', 'P')) >= 0 ||
                     (!number.startsWith("0x", true) && number.indexOfAny(charArrayOf('e', 'E')) >= 0)
                 ) "comptime_float" else "comptime_int"
             }
+
             TokenTag.CHAR_LITERAL -> "comptime_int"
             TokenTag.AMPERSAND -> expression(file, symbols, token + 1, depth + 1)?.let { "*$it" }
             TokenTag.L_PAREN -> expression(file, symbols, token + 1, depth + 1)
@@ -63,11 +65,17 @@ internal object ZigInferredType {
                         ZigDeclarationResolver.propertyType(file, offset) ?: run {
                             val resolved = ZigDeclarationResolver.resolve(file, offset) ?: return null
                             val target = ZigDeclarations.get(resolved.containingFile)
-                            declarationType(resolved.containingFile, target, target.tokenAt(resolved.textOffset), depth + 1)
+                            declarationType(
+                                resolved.containingFile,
+                                target,
+                                target.tokenAt(resolved.textOffset),
+                                depth + 1
+                            )
                         }
                     }
                 }
             }
+
             else -> null
         } ?: return null
         if (symbols.tag(token + 1) == TokenTag.PERIOD && symbols.tag(token + 2) == TokenTag.IDENTIFIER) {
@@ -161,7 +169,8 @@ internal object ZigInferredType {
         symbols.ast.forEachNode { node, tag, main, _, _ ->
             if (node and 255 == 0) ProgressManager.checkCanceled()
             if (main + 1 == nameToken && (tag == NodeTag.FN_PROTO || tag == NodeTag.FN_PROTO_ONE ||
-                    tag == NodeTag.FN_PROTO_SIMPLE || tag == NodeTag.FN_PROTO_MULTI)) {
+                    tag == NodeTag.FN_PROTO_SIMPLE || tag == NodeTag.FN_PROTO_MULTI)
+            ) {
                 return symbols.tokenAt(symbols.ast.nodePositions(node).end - 1) + 1
             }
         }
@@ -174,6 +183,7 @@ internal object ZigInferredType {
             when (symbols.tag(token)) {
                 TokenTag.COMMA, TokenTag.R_PAREN, TokenTag.R_BRACE, TokenTag.EQUAL, TokenTag.SEMICOLON,
                 TokenTag.EOF -> return token
+
                 else -> token = if (symbols.matching[token] > token) symbols.matching[token] + 1 else token + 1
             }
         }
@@ -204,11 +214,13 @@ internal object ZigInferredType {
                 when (source[index++]) {
                     'x' -> {
                         if (index + 2 > end || source[index].digitToIntOrNull(16) == null ||
-                            source[index + 1].digitToIntOrNull(16) == null) return null
+                            source[index + 1].digitToIntOrNull(16) == null
+                        ) return null
                         index += 2
                         length++
                         continue
                     }
+
                     'u' -> {
                         if (index >= end || source[index++] != '{') return null
                         codepoint = 0
@@ -219,8 +231,10 @@ internal object ZigInferredType {
                             codepoint = (codepoint shl 4) or digit
                         }
                         if (digits == 0 || index >= end || source[index++] != '}' ||
-                            codepoint > 0x10ffff || codepoint in 0xd800..0xdfff) return null
+                            codepoint > 0x10ffff || codepoint in 0xd800..0xdfff
+                        ) return null
                     }
+
                     'n', 'r', 't', '\\', '\'', '"' -> codepoint = 0
                     else -> return null
                 }

@@ -1,11 +1,13 @@
 package com.zigrawr.jbplugin.run
 
 import com.intellij.execution.configurations.RuntimeConfigurationError
+import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.zigrawr.jbplugin.IdeProjectState
 import com.zigrawr.jbplugin.declaration.ZigDeclarations
 import com.zigrawr.jbplugin.file.ZigFileType
 import com.zigrawr.zig.foreign.model.NodeTag
@@ -86,7 +88,8 @@ internal object ZigRunTargets {
     private fun get(file: PsiFile): RunTargetsSnapshot {
         val stamp =
             PsiDocumentManager.getInstance(file.project).getDocument(file)?.modificationStamp ?: file.modificationStamp
-        val cached = file.getUserData(targetsKey)
+        val cache = file.project.service<IdeProjectState>()
+        val cached = cache.cached(file, targetsKey)
         if (cached != null && cached.stamp == stamp && cached.fileName == file.name) return cached
         val symbols = ZigDeclarations.get(file)
         val targets = ArrayList<ZigRunTarget>()
@@ -168,8 +171,8 @@ internal object ZigRunTargets {
         }
         targets.sortBy { it.offset }
         return RunTargetsSnapshot(stamp, file.name, targets, tests.isNotEmpty()).also {
-            file.putUserData(
-                targetsKey,
+            cache.cache(
+                file, targetsKey,
                 it
             )
         }

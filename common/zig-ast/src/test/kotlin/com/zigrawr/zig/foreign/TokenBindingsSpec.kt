@@ -8,9 +8,12 @@ import com.zigrawr.zig.foreign.model.Tokens
 import com.zigrawr.zig.tokenizer.BaseSpec
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import java.lang.foreign.Arena
 
 class TokenBindingsSpec : BaseSpec({
-    val handles = context(Log.stderr) { BundledBindingsLoader.load() }
+    val arena = Arena.ofShared()
+    afterSpec { arena.close() }
+    val handles = context(Log.stderr) { BundledBindingsLoader.load(arena) }
 
     should("read UTF-16 token ranges and retain snapshots after reuse and close") {
         val bindings = Bindings(handles)

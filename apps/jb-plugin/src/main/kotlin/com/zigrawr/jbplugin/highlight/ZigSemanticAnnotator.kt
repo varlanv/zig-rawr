@@ -3,14 +3,16 @@ package com.zigrawr.jbplugin.highlight
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
-import com.intellij.openapi.editor.colors.TextAttributesKey
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
+import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiModificationTracker
+import com.zigrawr.jbplugin.IdeProjectState
 import com.zigrawr.jbplugin.declaration.ZigDeclarationResolver
 import com.zigrawr.jbplugin.declaration.ZigDeclarations
 import com.zigrawr.jbplugin.declaration.ZigResolvedKind
@@ -91,9 +93,10 @@ class ZigSemanticAnnotator : Annotator, DumbAware {
         val token = symbols.tokenAt(element.textOffset)
         if (token < 0 || symbols.tag(token) != TokenTag.IDENTIFIER) return
         val stamp = PsiModificationTracker.getInstance(file.project).modificationCount
-        val cached = file.getUserData(snapshotKey)
+        val cache = file.project.service<IdeProjectState>()
+        val cached = cache.cached(file, snapshotKey)
         val snapshot = if (cached != null && cached.symbols === symbols && cached.stamp == stamp) cached else {
-            SemanticSnapshot(symbols, stamp).also { file.putUserData(snapshotKey, it) }
+            SemanticSnapshot(symbols, stamp).also { cache.cache(file, snapshotKey, it) }
         }
         val attributes: TextAttributesKey = when (snapshot.role(file, token)) {
             FIELD -> ZigHighlightingColors.FIELD

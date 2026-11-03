@@ -29,6 +29,7 @@ private class Binding(
     val reflected: Namespace? = null,
     val valueBindings: Binding? = null,
 )
+
 private class Declaration(
     val file: PsiFile,
     val symbols: ZigDeclarations,
@@ -39,6 +40,7 @@ private class Declaration(
 ) {
     fun nameToken(): Int = if (index < 0) -index - 1 else symbols.nameToken(index)
 }
+
 private class Namespace(
     val file: PsiFile,
     val symbols: ZigDeclarations,
@@ -160,6 +162,7 @@ internal object ZigDeclarationResolver {
             when (receiver.symbols.tag(end)) {
                 TokenTag.COMMA, TokenTag.SEMICOLON, TokenTag.EQUAL, TokenTag.R_PAREN, TokenTag.R_BRACE,
                 TokenTag.L_BRACE, TokenTag.EOF -> break
+
                 else -> Unit
             }
             end = if (receiver.symbols.matching[end] > end) receiver.symbols.matching[end] + 1 else end + 1
@@ -222,7 +225,14 @@ internal object ZigDeclarationResolver {
             TokenTag.R_PAREN -> {
                 val open = symbols.matching[token]
                 if (open < 0) return null
-                if (symbols.tag(open - 1) == TokenTag.BUILTIN) expression(file, symbols, open - 1, depth + 1, token, bindings)
+                if (symbols.tag(open - 1) == TokenTag.BUILTIN) expression(
+                    file,
+                    symbols,
+                    open - 1,
+                    depth + 1,
+                    token,
+                    bindings
+                )
                 else if (symbols.tag(open - 1) == TokenTag.IDENTIFIER) {
                     val declaration = identifier(file, symbols, open - 1, depth + 1, bindings) ?: return null
                     functionResult(declaration, depth + 1, file, symbols, open, callerBindings = bindings)
@@ -286,7 +296,15 @@ internal object ZigDeclarationResolver {
         if (evaluate || symbols.matchesName(type, "type")) {
             val body = functionBody(symbols, type)
             if (body < 0) return null
-            return returnedValue(function.file, symbols, body + 1, symbols.matching[body], depth + 1, bindings, evaluate)
+            return returnedValue(
+                function.file,
+                symbols,
+                body + 1,
+                symbols.matching[body],
+                depth + 1,
+                bindings,
+                evaluate
+            )
         }
         return expression(function.file, symbols, type, depth + 1, bindings = bindings)
     }
@@ -317,7 +335,15 @@ internal object ZigDeclarationResolver {
                 ) expression(function.file, symbols, parameter + 2, depth + 1, close - 1, bindings) else null
                 if (receiver == null || receiver.sequence != 0) {
                     if (comptime || symbols.matchesName(parameter + 2, "type")) {
-                        bindings = Binding(symbols, parameter, source, values, argument, bindings, valueBindings = callerBindings)
+                        bindings = Binding(
+                            symbols,
+                            parameter,
+                            source,
+                            values,
+                            argument,
+                            bindings,
+                            valueBindings = callerBindings
+                        )
                     }
                     argument = afterExpression(values, argument, argumentEnd)
                     if (values.tag(argument) == TokenTag.COMMA) argument++
@@ -343,6 +369,7 @@ internal object ZigDeclarationResolver {
                 )
                 return input?.element?.withOrigin(declaration)
             }
+
             else -> Unit
         }
         val type = symbols.typeToken(declaration.index)
@@ -389,14 +416,20 @@ internal object ZigDeclarationResolver {
                 val bound = binding(symbols, token, bindings)
                 if (bound != null) {
                     bound.reflected ?: expression(
-                        bound.file, bound.values, bound.token, depth + 1, bindings = bound.valueBindings, evaluate = evaluate
+                        bound.file,
+                        bound.values,
+                        bound.token,
+                        depth + 1,
+                        bindings = bound.valueBindings,
+                        evaluate = evaluate
                     )
                 } else {
                     val declaration = identifier(file, symbols, token, depth + 1, bindings) ?: return null
                     if (symbols.tag(token + 1) == TokenTag.L_PAREN) {
                         val close = symbols.matching[token + 1]
                         if (close < 0 || close > last) return null
-                        val result = functionResult(declaration, depth + 1, file, symbols, token + 1, evaluate, bindings)
+                        val result =
+                            functionResult(declaration, depth + 1, file, symbols, token + 1, evaluate, bindings)
                         token = close
                         result
                     } else namespace(declaration, depth + 1, evaluate)
@@ -410,7 +443,10 @@ internal object ZigDeclarationResolver {
                 }
 
                 "@This" -> Namespace(file, symbols, symbols.enclosingNamespace(token), bindings = bindings)
-                "@typeInfo" -> expression(file, symbols, token + 2, depth + 1, bindings = bindings)?.withReflection(TYPE_INFO)
+                "@typeInfo" -> expression(file, symbols, token + 2, depth + 1, bindings = bindings)?.withReflection(
+                    TYPE_INFO
+                )
+
                 "@Enum" -> {
                     val end = symbols.matching.getOrElse(token + 1) { -1 }
                     if (end < 0) return null
@@ -422,6 +458,7 @@ internal object ZigDeclarationResolver {
                     if (fields.reflection != FIELD_NAMES) return null
                     fields.withReflection(FIELD_ENUM)
                 }
+
                 "@FieldType" -> {
                     val owner = expression(file, symbols, token + 2, depth + 1, bindings = bindings) ?: return null
                     val comma = afterExpression(symbols, token + 2, symbols.matching[token + 1])
@@ -429,6 +466,7 @@ internal object ZigDeclarationResolver {
                     val field = member(owner, name, file) ?: return null
                     namespace(field, depth + 1)
                 }
+
                 else -> null
             }
 
@@ -437,7 +475,16 @@ internal object ZigDeclarationResolver {
                 if (brace < 0) null else Namespace(file, symbols, brace, bindings = bindings)
             }
 
-            TokenTag.L_PAREN -> expression(file, symbols, token + 1, depth + 1, symbols.matching[token] - 1, bindings, evaluate)
+            TokenTag.L_PAREN -> expression(
+                file,
+                symbols,
+                token + 1,
+                depth + 1,
+                symbols.matching[token] - 1,
+                bindings,
+                evaluate
+            )
+
             TokenTag.STRING_LITERAL -> receiver(file, symbols, token, depth + 1, bindings)
             TokenTag.KEYWORD_SWITCH -> typeSwitch(file, symbols, token, depth + 1, bindings, evaluate)
             else -> null
@@ -522,11 +569,18 @@ internal object ZigDeclarationResolver {
         return when (symbols.tag(token)) {
             TokenTag.STRING_LITERAL -> symbols.string(token)
             TokenTag.PERIOD -> symbols.name(token + 1)
-            TokenTag.BUILTIN -> if (symbols.text(token) == "@tagName") fieldName(symbols, token + 2, bindings, depth + 1) else null
+            TokenTag.BUILTIN -> if (symbols.text(token) == "@tagName") fieldName(
+                symbols,
+                token + 2,
+                bindings,
+                depth + 1
+            ) else null
+
             TokenTag.IDENTIFIER -> {
                 val bound = binding(symbols, token, bindings) ?: return null
                 fieldName(bound.values, bound.token, bound.valueBindings, depth + 1)
             }
+
             else -> null
         }
     }
@@ -539,7 +593,8 @@ internal object ZigDeclarationResolver {
         var first = branch.first
         var context = bindings
         if (symbols.tag(first) == TokenTag.PIPE && symbols.tag(first + 2) == TokenTag.PIPE) {
-            context = Binding(symbols, first + 1, file, symbols, -1, bindings, branch.type.withReflection(CONTAINER_INFO))
+            context =
+                Binding(symbols, first + 1, file, symbols, -1, bindings, branch.type.withReflection(CONTAINER_INFO))
             first += 3
         }
         return expression(file, symbols, first, depth + 1, branch.end - 1, context, evaluate)
@@ -611,7 +666,16 @@ internal object ZigDeclarationResolver {
         while (token < end) {
             ProgressManager.checkCanceled()
             when (symbols.tag(token)) {
-                TokenTag.KEYWORD_RETURN -> return expression(file, symbols, token + 1, depth + 1, end - 1, bindings, evaluate)
+                TokenTag.KEYWORD_RETURN -> return expression(
+                    file,
+                    symbols,
+                    token + 1,
+                    depth + 1,
+                    end - 1,
+                    bindings,
+                    evaluate
+                )
+
                 TokenTag.KEYWORD_IF -> {
                     val close = symbols.matching.getOrElse(token + 1) { -1 }
                     if (close < 0) return null
@@ -622,7 +686,15 @@ internal object ZigDeclarationResolver {
                     if (truth) {
                         token = close + 1
                         if (symbols.tag(token) == TokenTag.L_BRACE) {
-                            return returnedValue(file, symbols, token + 1, symbols.matching[token], depth + 1, bindings, evaluate)
+                            return returnedValue(
+                                file,
+                                symbols,
+                                token + 1,
+                                symbols.matching[token],
+                                depth + 1,
+                                bindings,
+                                evaluate
+                            )
                         }
                         continue
                     }
@@ -631,11 +703,20 @@ internal object ZigDeclarationResolver {
                     if (symbols.tag(afterThen) == TokenTag.KEYWORD_ELSE) {
                         token = afterThen + 1
                         if (symbols.tag(token) == TokenTag.L_BRACE) {
-                            return returnedValue(file, symbols, token + 1, symbols.matching[token], depth + 1, bindings, evaluate)
+                            return returnedValue(
+                                file,
+                                symbols,
+                                token + 1,
+                                symbols.matching[token],
+                                depth + 1,
+                                bindings,
+                                evaluate
+                            )
                         }
                     } else token = next
                     continue
                 }
+
                 TokenTag.KEYWORD_SWITCH -> {
                     val branch = typeBranch(file, symbols, token, depth + 1, bindings)
                     if (branch == null) return null
@@ -644,11 +725,13 @@ internal object ZigDeclarationResolver {
                     token = symbols.matching[close + 1] + 1
                     continue
                 }
+
                 TokenTag.KEYWORD_CONST, TokenTag.KEYWORD_VAR -> {
                     while (token < end && symbols.tag(token) != TokenTag.SEMICOLON) {
                         token = if (symbols.matching[token] > token) symbols.matching[token] + 1 else token + 1
                     }
                 }
+
                 TokenTag.SEMICOLON -> Unit
                 else -> return null
             }
@@ -683,6 +766,7 @@ internal object ZigDeclarationResolver {
     private fun implicitMember(symbols: ZigDeclarations, token: Int): Boolean = when (symbols.tag(token - 2)) {
         TokenTag.IDENTIFIER, TokenTag.R_PAREN, TokenTag.R_BRACKET, TokenTag.STRING_LITERAL,
         TokenTag.PERIOD_ASTERISK -> false
+
         else -> true
     }
 
@@ -741,13 +825,16 @@ internal object ZigDeclarationResolver {
                     if (declaration < 0) return null
                     return functionResult(Declaration(file, symbols, declaration, bindings = bindings), depth + 1)
                 }
+
                 TokenTag.EQUAL -> return receiver(file, symbols, token - 1, depth + 1, bindings)
                 TokenTag.EQUAL_EQUAL, TokenTag.BANG_EQUAL ->
                     return receiver(file, symbols, token - 1, depth + 1, bindings)
+
                 TokenTag.KEYWORD_ELSE -> {
                     val branch = symbols.branchExpression(token)
                     return if (branch < 0) null else expected(file, symbols, branch, depth + 1, bindings)
                 }
+
                 TokenTag.L_BRACE -> {
                     if (symbols.tag(token - 1) == TokenTag.PERIOD || symbols.tag(token - 1) == TokenTag.IDENTIFIER) {
                         val type = initializer(file, symbols, token, depth + 1, bindings) ?: return null
@@ -770,6 +857,7 @@ internal object ZigDeclarationResolver {
                     }
                     return null
                 }
+
                 TokenTag.L_PAREN -> {
                     when (symbols.tag(token - 1)) {
                         TokenTag.KEYWORD_IF, TokenTag.KEYWORD_SWITCH, TokenTag.KEYWORD_WHILE -> return null
@@ -790,12 +878,22 @@ internal object ZigDeclarationResolver {
                     var parameter = parameters.nameToken(function.index) + 2
                     if (callee.owner?.origin != null) {
                         val receiverType = if (parameters.tag(parameter + 1) == TokenTag.COLON) {
-                            expression(function.file, parameters, parameter + 2, depth + 1, bindings = function.bindings)
+                            expression(
+                                function.file,
+                                parameters,
+                                parameter + 2,
+                                depth + 1,
+                                bindings = function.bindings
+                            )
                         } else null
                         if (receiverType != null && receiverType.sequence == 0) index++
                     }
                     repeat(index) {
-                        parameter = afterExpression(parameters, parameter, parameters.matching[parameters.nameToken(function.index) + 1]) + 1
+                        parameter = afterExpression(
+                            parameters,
+                            parameter,
+                            parameters.matching[parameters.nameToken(function.index) + 1]
+                        ) + 1
                     }
                     while (parameters.tag(parameter) == TokenTag.KEYWORD_COMPTIME ||
                         parameters.tag(parameter) == TokenTag.KEYWORD_NOALIAS
@@ -803,6 +901,7 @@ internal object ZigDeclarationResolver {
                     if (parameters.tag(parameter + 1) != TokenTag.COLON) return null
                     return expression(function.file, parameters, parameter + 2, depth + 1, bindings = function.bindings)
                 }
+
                 TokenTag.SEMICOLON, TokenTag.R_BRACE -> return null
                 TokenTag.R_PAREN, TokenTag.R_BRACKET -> {
                     val open = symbols.matching[token]
@@ -812,6 +911,7 @@ internal object ZigDeclarationResolver {
                     }
                     token = open
                 }
+
                 else -> Unit
             }
             token--
@@ -829,14 +929,17 @@ internal object ZigDeclarationResolver {
                     if (close < 0) return first
                     token = close
                 }
+
                 TokenTag.L_BRACE -> {
                     if (symbols.tag(token - 1) != TokenTag.KEYWORD_ERROR) return first
                     val close = symbols.matching[token]
                     if (close < 0) return first
                     token = close
                 }
+
                 TokenTag.COMMA, TokenTag.SEMICOLON, TokenTag.EQUAL, TokenTag.R_PAREN, TokenTag.R_BRACE,
                 TokenTag.KEYWORD_CATCH, TokenTag.KEYWORD_ORELSE, TokenTag.EOF -> return first
+
                 else -> Unit
             }
             token++

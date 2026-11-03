@@ -14,13 +14,14 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
-// todo while efficient, this implementation lead to 2 threadlocal states in a single file
-//      before starting refactoring, need to prepare benchmarks and establish baseline
-private val utf8Buffers = ThreadLocal.withInitial(::Utf8Buffers)
-
-private inline fun <T> useUtfBuffers(block: (Utf8Buffers) -> T): T {
-    val cached = utf8Buffers.get()
+private inline fun <T> Bindings.State.useUtfBuffers(block: (Utf8Buffers) -> T): T {
+    val holder = utf8Buffers.get()
+    val cached = holder.get() ?: Utf8Buffers().also(holder::set)
     // in theory, custom CharSequence can reenter parsing while we copy its characters.
     // extremely unlikely, but doesn't cost anything to check
     val buffers = if (cached.inUse) Utf8Buffers() else cached
@@ -36,10 +37,11 @@ private inline fun <T> useUtfBuffers(block: (Utf8Buffers) -> T): T {
  * Zig AST and tokenizer bindings facade.
  * Each thread owns a native state with a reusable arena. Calls return independent snapshots.
  * [close] releases every native state created by this instance.
- * Parsing may run concurrently. Call [close] only after all parses have completed.
+ * Parsing may run concurrently. [close] waits for active calls and rejects new calls.
  */
 class Bindings(private val handles: Handles) {
     private val state = State(handles)
+
     val ast = Ast(state)
     val tokens = Tokens(state)
 
@@ -133,6 +135,12 @@ class Bindings(private val handles: Handles) {
     internal class State(internal val handles: Handles) {
         internal val states = ConcurrentLinkedQueue<MemorySegment>()
         internal val closed = AtomicBoolean()
+        internal val lifecycle = ReentrantReadWriteLock()
+        internal val bufferHolders = ConcurrentLinkedQueue<AtomicReference<Utf8Buffers>>()
+        internal val utf8Buffers = ThreadLocal.withInitial {
+            AtomicReference<Utf8Buffers>().also(bufferHolders::add)
+        }
+
         internal val threadState = ThreadLocal.withInitial {
             val state = handles.zrStartSession() as MemorySegment
             check(state != MemorySegment.NULL) { "Failed to initialize native parser" }
@@ -140,11 +148,11 @@ class Bindings(private val handles: Handles) {
             state
         }
 
-        inline fun <T> use(block: (MemorySegment) -> T): T {
+        inline fun <T> use(block: (MemorySegment) -> T): T = lifecycle.read {
             check(!closed.get()) { "Bindings are closed" }
             val state = threadState.get()
             try {
-                return block(state)
+                block(state)
             } finally {
                 handles.zrFree(state)
             }
@@ -165,7 +173,8 @@ class Bindings(private val handles: Handles) {
     }
 
     fun close() {
-        if (state.closed.compareAndSet(false, true)) {
+        state.lifecycle.write {
+            if (!state.closed.compareAndSet(false, true)) return
             while (true) {
                 val state = state.states.poll() ?: break
                 try {
@@ -175,6 +184,11 @@ class Bindings(private val handles: Handles) {
                 }
             }
             state.threadState.remove()
+            while (true) {
+                val holder = state.bufferHolders.poll() ?: break
+                holder.set(null)
+            }
+            state.utf8Buffers.remove()
         }
     }
 }
@@ -186,9 +200,9 @@ private inline fun <T> Bindings.State.useChars(
     block: (MemorySegment, MemorySegment, Long) -> T,
 ): T {
     require(startOffset in 0..endOffset && endOffset <= source.length)
-    return useUtfBuffers { buffers ->
-        val encoded = buffers.encode(source, startOffset, endOffset)
-        use { mem ->
+    return use { mem ->
+        useUtfBuffers { buffers ->
+            val encoded = buffers.encode(source, startOffset, endOffset)
             val sourceLen = encoded.remaining().toLong()
             val input = allocateInput(handles, mem, sourceLen)
             input.asSlice(0, sourceLen).copyFrom(MemorySegment.ofBuffer(encoded))
@@ -214,7 +228,7 @@ private fun allocateInput(handles: Handles, mem: MemorySegment, sourceLen: Long)
     return input.reinterpret(sourceLen + 1)
 }
 
-private class Utf8Buffers {
+internal class Utf8Buffers {
     var inUse = false
     private val encoder = StandardCharsets.UTF_8.newEncoder()
         .onMalformedInput(CodingErrorAction.REPLACE)

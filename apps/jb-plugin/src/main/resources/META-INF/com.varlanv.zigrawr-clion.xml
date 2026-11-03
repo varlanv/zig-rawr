@@ -1,0 +1,11 @@
+<idea-plugin>
+    <depends>com.intellij.nativeDebug</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <programRunner implementation="com.zigrawr.jbplugin.run.ZigDebugRunner"/>
+    </extensions>
+    <extensions defaultExtensionNs="cidr.debugger">
+        <languageSupport language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigDebuggerLanguageSupport"/>
+        <lineBreakpointFileTypesProvider implementation="com.zigrawr.jbplugin.run.ZigLineBreakpointFileTypesProvider"/>
+        <editorsExtension language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigDebuggerEditorsExtension"/>
+    </extensions>
+</idea-plugin>

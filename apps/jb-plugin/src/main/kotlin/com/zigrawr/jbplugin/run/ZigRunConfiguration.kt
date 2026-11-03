@@ -10,7 +10,6 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
-import com.jetbrains.cidr.execution.CidrDebugProfile
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
@@ -38,7 +37,7 @@ class ZigRunConfiguration(
     project: Project,
     factory: ConfigurationFactory,
     name: String,
-) : LocatableConfigurationBase<ZigRunConfigurationOptions>(project, factory, name), CidrDebugProfile {
+) : LocatableConfigurationBase<ZigRunConfigurationOptions>(project, factory, name) {
     override fun getOptions(): ZigRunConfigurationOptions = super.getOptions() as ZigRunConfigurationOptions
 
     override fun getOptionsClass(): Class<ZigRunConfigurationOptions> = ZigRunConfigurationOptions::class.java

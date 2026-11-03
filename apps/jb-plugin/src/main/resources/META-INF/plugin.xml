@@ -5,8 +5,11 @@
     <description>Zig language support. todotofill40charsrequirement</description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
-    <depends>com.intellij.modules.cidr.debugger</depends>
-    <depends>com.intellij.modules.clion</depends>
+    <depends optional="true" config-file="com.varlanv.zigrawr-clion.xml">com.intellij.clion</depends>
+    <applicationListeners>
+        <listener class="com.zigrawr.jbplugin.highlight.ZigColorSchemeListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
     <extensions defaultExtensionNs="com.intellij">
         <annotator language="Zig" implementationClass="com.zigrawr.jbplugin.highlight.ZigSemanticAnnotator"/>
         <colorSettingsPage implementation="com.zigrawr.jbplugin.highlight.ZigColorSettingsPage"/>
@@ -17,7 +20,6 @@
         <runConfigurationProducer implementation="com.zigrawr.jbplugin.run.ZigFileTestsConfigurationProducer"/>
         <runLineMarkerContributor language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigRunLineMarkerContributor"/>
         <programRunner implementation="com.zigrawr.jbplugin.run.ZigProgramRunner"/>
-        <programRunner implementation="com.zigrawr.jbplugin.run.ZigDebugRunner"/>
         <projectConfigurable parentId="language" id="com.zigrawr.toolchain" displayName="Zig Rawr"
                              instance="com.zigrawr.jbplugin.toolchain.ZigToolchainConfigurable"/>
         <additionalLibraryRootsProvider implementation="com.zigrawr.jbplugin.toolchain.ZigLibraryRootsProvider"/>
@@ -29,7 +31,7 @@
         <lineIndentProvider implementation="com.zigrawr.jbplugin.indent.ZigLineIndentProvider"/>
         <enterBetweenBracesDelegate
             language="Zig"
-            implementation="com.zigrawr.jbplugin.indent.ZigEnterBetweenBracesDelegate"/>
+            implementationClass="com.zigrawr.jbplugin.indent.ZigEnterBetweenBracesDelegate"/>
         <lang.parserDefinition
             language="Zig"
             implementationClass="com.zigrawr.jbplugin.lexer.ZigParserDefinition"/>
@@ -48,9 +50,5 @@
             extensions="zon"
             implementationClass="com.zigrawr.jbplugin.file.ZonFileType"
             fieldName="INSTANCE"/>
-    </extensions>
-    <extensions defaultExtensionNs="cidr.debugger">
-        <lineBreakpointFileTypesProvider implementation="com.zigrawr.jbplugin.run.ZigLineBreakpointFileTypesProvider"/>
-        <editorsExtension language="Zig" implementationClass="com.zigrawr.jbplugin.run.ZigDebuggerEditorsExtension"/>
     </extensions>
 </idea-plugin>

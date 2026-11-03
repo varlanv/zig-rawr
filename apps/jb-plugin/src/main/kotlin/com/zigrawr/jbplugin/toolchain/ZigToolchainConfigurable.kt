@@ -1,10 +1,12 @@
 package com.zigrawr.jbplugin.toolchain
 
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.SearchableConfigurable
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.Disposer
@@ -17,6 +19,11 @@ import java.util.concurrent.CompletableFuture
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 
 class ZigToolchainConfigurable(private val project: Project) : SearchableConfigurable {
     private class Form(project: Project) {
@@ -55,6 +62,7 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
 
     private var form: Form? = null
     private var request = 0
+    private var updateJob: Job? = null
 
     override fun getId(): String = "com.zigrawr.toolchain"
     override fun getDisplayName(): String = "Zig Rawr"
@@ -96,6 +104,8 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
 
     override fun reset() {
         val current = form ?: return
+        updateJob?.cancel()
+        updateJob = null
         request++
         current.check.isEnabled = true
         current.reload.isEnabled = true
@@ -106,6 +116,8 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
     }
 
     override fun disposeUIResources() {
+        updateJob?.cancel()
+        updateJob = null
         request++
         val current = form ?: return
         form = null
@@ -118,23 +130,31 @@ class ZigToolchainConfigurable(private val project: Project) : SearchableConfigu
         current.reload.isEnabled = false
         display(current, null, "Checking Zig…")
         val modality = ModalityState.stateForComponent(current.panel)
-        result.whenComplete { info, error ->
-            ApplicationManager.getApplication().invokeLater({
-                if (form !== current || sequence != request || project.isDisposed) return@invokeLater
-                current.check.isEnabled = true
-                current.reload.isEnabled = true
-                if (current.executable.text.trim() != executable) {
-                    display(current, null, "Executable changed. Check again.")
-                } else if (error != null) {
-                    display(current, null, error.cause?.message ?: error.message ?: "Unable to inspect Zig.")
-                } else {
-                    display(
-                        current,
-                        info,
-                        if (info == null) project.service<ZigToolchainService>().statusMessage else "Ready"
-                    )
-                }
-            }, modality)
+        updateJob?.cancel()
+        updateJob = project.service<ZigToolchainService>().coroutineScope.launch(
+            Dispatchers.EDT + modality.asContextElement()
+        ) {
+            var info: ZigToolchainInfo? = null
+            var error: Exception? = null
+            try {
+                info = result.await()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: ProcessCanceledException) {
+                throw exception
+            } catch (exception: Exception) {
+                error = exception
+            }
+            if (form !== current || sequence != request || project.isDisposed) return@launch
+            current.check.isEnabled = true
+            current.reload.isEnabled = true
+            if (current.executable.text.trim() != executable) {
+                display(current, null, "Executable changed. Check again.")
+            } else if (error != null) {
+                display(current, null, error.cause?.message ?: error.message ?: "Unable to inspect Zig.")
+            } else {
+                display(current, info, if (info == null) project.service<ZigToolchainService>().statusMessage else "Ready")
+            }
         }
     }
 

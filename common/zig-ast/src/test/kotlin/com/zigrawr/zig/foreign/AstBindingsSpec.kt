@@ -9,6 +9,7 @@ import com.zigrawr.zig.tokenizer.BaseSpec
 import com.zigrawr.zig.tokenizer.useTempDir
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout.PathElement.groupElement
 import java.lang.foreign.MemorySegment
 import java.lang.invoke.MethodHandles
@@ -19,7 +20,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class BindingsSpec : BaseSpec({
-    val handles = context(Log.stderr) { BundledBindingsLoader.load() }
+    val arena = Arena.ofShared()
+    afterSpec { arena.close() }
+    val handles = context(Log.stderr) { BundledBindingsLoader.load(arena) }
 
     fun useBindings(block: (bindings: Bindings) -> Unit) {
         val bindings = Bindings(handles)
